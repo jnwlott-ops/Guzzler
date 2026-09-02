@@ -1,20 +1,38 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmenityFilter } from '../components/AmenityFilter';
 import { GradeSelector } from '../components/GradeSelector';
+import { RangeRings } from '../components/RangeRings';
 import { RankModeToggle } from '../components/RankModeToggle';
 import { RateStationModal } from '../components/RateStationModal';
 import { ReportPriceModal } from '../components/ReportPriceModal';
 import { StationMarker } from '../components/StationMarker';
 import { StationSheet } from '../components/StationSheet';
+import { VehicleModal } from '../components/VehicleModal';
 import { activeFeed } from '../data/priceFeed';
 import { useStations } from '../hooks/useStations';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
+import { useVehicle } from '../hooks/useVehicle';
 import { formatPrice } from '../lib/pricing';
-import { matchesFilters, rankStations, verdictForMode, type RankMode } from '../lib/value';
+import { estimateRange, formatLevel, formatMiles } from '../lib/range';
+import {
+  findRangeDeal,
+  matchesFilters,
+  rankStations,
+  verdictForMode,
+  type RankMode,
+} from '../lib/value';
 import { colors, radius, spacing } from '../theme';
 import type { Amenity, FuelGrade, Region, Station } from '../types';
 
@@ -32,6 +50,10 @@ export function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [reporting, setReporting] = useState<Station | undefined>();
   const [rating, setRating] = useState<Station | undefined>();
+  const [editingVehicle, setEditingVehicle] = useState(false);
+
+  const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
+  const range = useMemo(() => estimateRange(vehicle), [vehicle]);
 
   const initialRegion: Region = {
     ...(location ?? FALLBACK_LOCATION),
@@ -52,8 +74,14 @@ export function MapScreen() {
   );
 
   const { ranked, median, best } = useMemo(
-    () => rankStations(visible, grade, mode),
-    [visible, grade, mode],
+    () => rankStations(visible, grade, mode, { origin: location, range }),
+    [visible, grade, mode, location, range],
+  );
+
+  // Only meaningful once we know both where the driver is and what they drive.
+  const deal = useMemo(
+    () => (vehicle && location ? findRangeDeal(ranked, vehicle.capacity) : undefined),
+    [ranked, vehicle, location],
   );
 
   const selected = ranked.find((r) => r.station.id === selectedId);
@@ -94,6 +122,7 @@ export function MapScreen() {
         showsMyLocationButton
         onPress={() => setSelectedId(undefined)}
       >
+        {location && range && <RangeRings center={location} range={range} />}
         {ranked.map((entry) => (
           <StationMarker
             key={entry.station.id}
@@ -136,6 +165,44 @@ export function MapScreen() {
         <View style={styles.filterBar}>
           <AmenityFilter selected={filters} onToggle={toggleFilter} />
         </View>
+
+        {/* Range summary doubles as the entry point to vehicle setup. */}
+        <View style={styles.rangeBar}>
+          <Pressable
+            style={styles.rangeChip}
+            onPress={() => setEditingVehicle(true)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              range
+                ? `${vehicle?.label}, ${formatMiles(range.comfortableMiles)} of range. Edit vehicle.`
+                : 'Add your vehicle to see your range'
+            }
+          >
+            <Text style={styles.rangeIcon}>{vehicle?.fuelType === 'ev' ? '⚡' : '⛽'}</Text>
+            <Text style={styles.rangeText} numberOfLines={1}>
+              {range && vehicle
+                ? `${formatMiles(range.comfortableMiles)} range · ${formatLevel(vehicle.level)}`
+                : 'Add your vehicle'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {deal && (
+          <Pressable
+            style={styles.dealBanner}
+            onPress={() => setSelectedId(deal.target.station.id)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.dealTitle}>
+              Don't fill up yet — save ${deal.savings.toFixed(2)}
+            </Text>
+            <Text style={styles.dealBody}>
+              {deal.target.station.name} at {formatPrice(deal.target.price)} is{' '}
+              {formatMiles(Math.max(0, deal.extraMiles))} further than the nearest stop, and well
+              inside your range.
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.attribution} pointerEvents="none">
@@ -173,6 +240,14 @@ export function MapScreen() {
           onClose={() => setRating(undefined)}
         />
       )}
+
+      <VehicleModal
+        visible={editingVehicle}
+        vehicle={vehicle}
+        onSave={saveVehicle}
+        onClear={clearVehicle}
+        onClose={() => setEditingVehicle(false)}
+      />
     </View>
   );
 }
@@ -229,6 +304,58 @@ const styles = StyleSheet.create({
   filterBar: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
+  },
+  rangeBar: {
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  rangeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  rangeIcon: {
+    fontSize: 13,
+    marginRight: spacing.xs + 1,
+  },
+  rangeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dealBanner: {
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.deal,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  dealTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  dealBody: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 17,
   },
   attribution: {
     position: 'absolute',

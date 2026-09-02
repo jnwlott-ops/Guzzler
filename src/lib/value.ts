@@ -1,5 +1,6 @@
 import { medianPrice, priceFor, verdictFor, type PriceVerdict } from './pricing';
-import type { Amenity, FuelGrade, Station } from '../types';
+import { drivingDistanceMiles, reachabilityOf, type RangeEstimate, type Reachability } from './range';
+import type { Amenity, FuelGrade, LatLng, Station } from '../types';
 
 /**
  * What the map is currently ranking on.
@@ -36,6 +37,10 @@ export interface RankedStation {
   valueVerdict: PriceVerdict;
   /** Best station under the active mode. */
   isBest: boolean;
+  /** Estimated driving miles from the driver. Undefined without a location. */
+  distance: number | undefined;
+  /** Whether the driver can actually get here on what's in the tank. */
+  reachability: Reachability;
 }
 
 export interface RankingResult {
@@ -43,6 +48,12 @@ export interface RankingResult {
   median: number | undefined;
   /** The winner under the active mode, if there is one. */
   best: RankedStation | undefined;
+}
+
+/** Where the driver is and how far they can get, for reachability scoring. */
+export interface ReachContext {
+  origin: LatLng | undefined;
+  range: RangeEstimate | undefined;
 }
 
 /**
@@ -122,6 +133,7 @@ export function rankStations(
   stations: Station[],
   grade: FuelGrade,
   mode: RankMode,
+  reach?: ReachContext,
 ): RankingResult {
   const median = medianPrice(stations, grade);
 
@@ -132,11 +144,22 @@ export function rankStations(
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
 
-  const withScores = stations.map((station) => ({
-    station,
-    price: priceFor(station, grade),
-    value: valueScore(station, grade, minPrice, maxPrice),
-  }));
+  const withScores = stations.map((station) => {
+    const distance = reach?.origin
+      ? drivingDistanceMiles(reach.origin, station.coordinate)
+      : undefined;
+
+    return {
+      station,
+      price: priceFor(station, grade),
+      value: valueScore(station, grade, minPrice, maxPrice),
+      distance,
+      reachability:
+        distance === undefined
+          ? ('comfortable' as Reachability)
+          : reachabilityOf(distance, reach?.range),
+    };
+  });
 
   const sortedValues = withScores
     .map((s) => s.value)
@@ -144,9 +167,13 @@ export function rankStations(
     .sort((a, b) => a - b);
 
   // The winner under the active mode: lowest price, or highest value score.
+  // Unreachable stations are excluded outright — the cheapest gas in the state
+  // is not a recommendation if the driver runs dry forty miles short of it.
   let bestId: string | undefined;
   let bestMetric = -Infinity;
   for (const entry of withScores) {
+    if (entry.reachability === 'unreachable') continue;
+
     const metric =
       mode === 'price'
         ? entry.price === undefined
@@ -166,6 +193,8 @@ export function rankStations(
     priceVerdict: verdictFor(entry.price, median),
     valueVerdict: bandFor(entry.value, sortedValues),
     isBest: entry.station.id === bestId,
+    distance: entry.distance,
+    reachability: entry.reachability,
   }));
 
   return {
@@ -173,6 +202,56 @@ export function rankStations(
     median,
     best: ranked.find((r) => r.isBest),
   };
+}
+
+/**
+ * The advice a driver at a gouging exit actually needs: can I make it to
+ * something cheaper, and is the detour worth it?
+ *
+ * This is the point of the range feature. Highway-exit pricing works precisely
+ * because drivers don't know whether they can safely pass it up — putting a
+ * number on that is what turns the price map into a decision.
+ */
+export interface RangeDeal {
+  /** The cheapest station the driver can comfortably reach. */
+  target: RankedStation;
+  /** The nearest station, i.e. the default "just pull in here" option. */
+  nearest: RankedStation;
+  /** Savings on a full fill-up by driving on. Positive means worth it. */
+  savings: number;
+  /** Extra driving miles the detour costs versus the nearest station. */
+  extraMiles: number;
+}
+
+/**
+ * Finds whether pressing on beats filling up at the nearest station.
+ *
+ * Only considers `comfortable` stations: advice that spends the driver's
+ * reserve to save three dollars is bad advice, however good the arithmetic
+ * looks.
+ */
+export function findRangeDeal(
+  ranked: RankedStation[],
+  tankGallons: number,
+): RangeDeal | undefined {
+  const usable = ranked.filter(
+    (r) => r.price !== undefined && r.distance !== undefined && r.reachability === 'comfortable',
+  );
+  if (usable.length < 2) return undefined;
+
+  const nearest = usable.reduce((a, b) => (a.distance! <= b.distance! ? a : b));
+  const cheapest = usable.reduce((a, b) => (a.price! <= b.price! ? a : b));
+
+  if (cheapest.station.id === nearest.station.id) return undefined;
+
+  const savings = (nearest.price! - cheapest.price!) * tankGallons;
+  const extraMiles = cheapest.distance! - nearest.distance!;
+
+  // Not worth surfacing for pocket change, and never worth surfacing when the
+  // "deal" is more expensive than just stopping.
+  if (savings < 1) return undefined;
+
+  return { target: cheapest, nearest, savings, extraMiles };
 }
 
 /** The verdict that should color a pin, given the active mode. */

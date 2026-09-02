@@ -143,6 +143,37 @@ export interface Station {
   sponsored?: SponsoredPlacement;
 }
 
+/**
+ * What a vehicle burns. Kept as a discriminator rather than two separate
+ * vehicle types, because the range math is identical once you agree on units:
+ * capacity x efficiency x how full you are.
+ */
+export type VehicleFuelType = 'gas' | 'ev';
+
+/**
+ * The driver's vehicle, used to work out how far they can actually get.
+ *
+ * Units switch on `fuelType` — gallons and MPG for gas, kWh and mi/kWh for
+ * electric — so one set of range functions serves both.
+ */
+export interface Vehicle {
+  /** Free-text label, e.g. "2019 Camry". Display only. */
+  label: string;
+  fuelType: VehicleFuelType;
+  /** Tank size in gallons (gas) or usable battery in kWh (EV). */
+  capacity: number;
+  /** Miles per gallon (gas) or miles per kWh (EV). */
+  efficiency: number;
+  /** How full the tank/battery is right now, 0-1. */
+  level: number;
+}
+
+/** Units for a vehicle's capacity and efficiency, for display. */
+export const VEHICLE_UNITS: Record<VehicleFuelType, { capacity: string; efficiency: string }> = {
+  gas: { capacity: 'gal', efficiency: 'MPG' },
+  ev: { capacity: 'kWh', efficiency: 'mi/kWh' },
+};
+
 /** A price a user submits from the pump. */
 export interface PriceReport {
   stationId: string;

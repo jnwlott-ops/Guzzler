@@ -1,6 +1,7 @@
 import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatAge, formatPrice, priceFor, savingsPerTank, verdictFor } from '../lib/pricing';
+import { formatMiles } from '../lib/range';
 import { formatRating, type RankedStation, type RankMode } from '../lib/value';
 import { colors, radius, spacing, verdictColor, verdictLabel } from '../theme';
 import {
@@ -51,7 +52,10 @@ export function StationSheet({
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.brand}>{station.name}</Text>
-          <Text style={styles.address}>{station.address}</Text>
+          <Text style={styles.address}>
+            {ranked.distance !== undefined && `${formatMiles(ranked.distance)} · `}
+            {station.address}
+          </Text>
         </View>
         <Pressable
           onPress={onClose}
@@ -80,8 +84,26 @@ export function StationSheet({
         )}
       </View>
 
-      <View style={[styles.verdictPill, { backgroundColor: verdictColor[verdict] }]}>
-        <Text style={styles.verdictText}>{verdictLabel[verdict]}</Text>
+      <View style={styles.pills}>
+        <View style={[styles.verdictPill, { backgroundColor: verdictColor[verdict] }]}>
+          <Text style={styles.verdictText}>{verdictLabel[verdict]}</Text>
+        </View>
+        {/* Only worth saying when it's a warning; "you can reach this" is noise. */}
+        {ranked.reachability !== 'comfortable' && (
+          <View
+            style={[
+              styles.verdictPill,
+              {
+                backgroundColor:
+                  ranked.reachability === 'unreachable' ? colors.gouge : colors.typical,
+              },
+            ]}
+          >
+            <Text style={styles.verdictText}>
+              {ranked.reachability === 'unreachable' ? 'Out of range' : 'Into your reserve'}
+            </Text>
+          </View>
+        )}
       </View>
 
       {savings !== undefined && Math.abs(savings) >= 0.5 && (
@@ -255,12 +277,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
   },
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   verdictPill: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.sm,
-    marginTop: spacing.md,
   },
   verdictText: {
     color: '#FFFFFF',

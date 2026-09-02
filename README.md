@@ -22,6 +22,13 @@ you are — the thing a traveler passing through can't know on their own.
 - **Amenities and restroom ratings.** Drivers rate restrooms and the stop
   overall; amenity chips filter the map down to stops that have what you need
   (truck access, EV charging, food, open 24h).
+- **Range rings.** Enter your tank size, MPG and current level, and the map
+  shows how far you can actually get. Stations beyond it are flagged, and an
+  unreachable station can never be ranked "best." See [docs/RANGE.md](docs/RANGE.md)
+  — including why a circle is an approximation of a real isochrone.
+- **"Don't fill up yet."** When a cheaper station is comfortably within range,
+  Guzzler says so and names the savings. This is the anti-gouging feature:
+  highway-exit pricing works because drivers don't know if they can pass it up.
 - **Per-tank savings.** "Save about $4.20 on a 14-gallon fill-up" beats a bare
   price delta.
 - **Freshness as a trust signal.** Every quote carries a timestamp and a source,
@@ -61,10 +68,12 @@ src/
     mockPriceFeed.ts    Deterministic generated stations for development
   lib/
     pricing.ts          Median, verdicts, savings, formatting
-    value.ts            Value scoring, rank modes, amenity filtering
+    value.ts            Value scoring, rank modes, filtering, range deals
+    range.ts            Tank → miles, haversine distance, reachability
   hooks/
     useUserLocation.ts  Foreground location, with denial as a normal path
     useStations.ts      Debounced region → stations, with abort on pan
+    useVehicle.ts       Vehicle profile, persisted to AsyncStorage
   components/           Map pin, selectors, filters, station sheet, modals
   screens/MapScreen.tsx Composition root
 ```
