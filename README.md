@@ -29,6 +29,10 @@ you are — the thing a traveler passing through can't know on their own.
 - **"Don't fill up yet."** When a cheaper station is comfortably within range,
   Guzzler says so and names the savings. This is the anti-gouging feature:
   highway-exit pricing works because drivers don't know if they can pass it up.
+- **Trip planning.** Enter a destination and Guzzler picks the stops — cheapest
+  once detours and driver ratings are priced in, never dipping below reserve.
+  The plan is *proposed*, never applied: it shows every stop's price, gallons
+  and arrival range, and the driver accepts. See [docs/ROUTING.md](docs/ROUTING.md).
 - **Per-tank savings.** "Save about $4.20 on a 14-gallon fill-up" beats a bare
   price delta.
 - **Freshness as a trust signal.** Every quote carries a timestamp and a source,
@@ -66,14 +70,18 @@ src/
   data/
     priceFeed.ts        The PriceFeed interface + the active provider
     mockPriceFeed.ts    Deterministic generated stations for development
+    routeProvider.ts    The RouteProvider interface + a mock directions service
   lib/
     pricing.ts          Median, verdicts, savings, formatting
     value.ts            Value scoring, rank modes, filtering, range deals
     range.ts            Tank → miles, haversine distance, reachability
+    route.ts            Projecting stations onto a route, corridor filtering
+    tripPlanner.ts      Shortest-path DP over corridor stations
   hooks/
     useUserLocation.ts  Foreground location, with denial as a normal path
     useStations.ts      Debounced region → stations, with abort on pan
     useVehicle.ts       Vehicle profile, persisted to AsyncStorage
+    useTrip.ts          Route fetch + stop planning
   components/           Map pin, selectors, filters, station sheet, modals
   screens/MapScreen.tsx Composition root
 ```

@@ -174,6 +174,19 @@ export const VEHICLE_UNITS: Record<VehicleFuelType, { capacity: string; efficien
   ev: { capacity: 'kWh', efficiency: 'mi/kWh' },
 };
 
+/** A driving route, as a polyline plus the totals a planner needs. */
+export interface Route {
+  /** Ordered points along the route. */
+  points: LatLng[];
+  /** Total driving distance in miles. */
+  distanceMiles: number;
+  /** Estimated driving time in minutes, excluding stops. */
+  durationMinutes: number;
+  /** Resolved destination, for display. */
+  destinationName: string;
+  destination: LatLng;
+}
+
 /** A price a user submits from the pump. */
 export interface PriceReport {
   stationId: string;

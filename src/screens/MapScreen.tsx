@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmenityFilter } from '../components/AmenityFilter';
@@ -19,9 +19,12 @@ import { RateStationModal } from '../components/RateStationModal';
 import { ReportPriceModal } from '../components/ReportPriceModal';
 import { StationMarker } from '../components/StationMarker';
 import { StationSheet } from '../components/StationSheet';
+import { TripModal } from '../components/TripModal';
+import { TripPlanSheet } from '../components/TripPlanSheet';
 import { VehicleModal } from '../components/VehicleModal';
 import { activeFeed } from '../data/priceFeed';
 import { useStations } from '../hooks/useStations';
+import { useTrip } from '../hooks/useTrip';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
 import { useVehicle } from '../hooks/useVehicle';
 import { formatPrice } from '../lib/pricing';
@@ -51,6 +54,8 @@ export function MapScreen() {
   const [reporting, setReporting] = useState<Station | undefined>();
   const [rating, setRating] = useState<Station | undefined>();
   const [editingVehicle, setEditingVehicle] = useState(false);
+
+  const [planningTrip, setPlanningTrip] = useState(false);
 
   const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
   const range = useMemo(() => estimateRange(vehicle), [vehicle]);
@@ -83,6 +88,8 @@ export function MapScreen() {
     () => (vehicle && location ? findRangeDeal(ranked, vehicle.capacity) : undefined),
     [ranked, vehicle, location],
   );
+
+  const trip = useTrip({ origin: location, vehicle, grade, stations });
 
   const selected = ranked.find((r) => r.station.id === selectedId);
 
@@ -123,6 +130,13 @@ export function MapScreen() {
         onPress={() => setSelectedId(undefined)}
       >
         {location && range && <RangeRings center={location} range={range} />}
+        {trip.route && (
+          <Polyline
+            coordinates={trip.route.points}
+            strokeColor={colors.accent}
+            strokeWidth={4}
+          />
+        )}
         {ranked.map((entry) => (
           <StationMarker
             key={entry.station.id}
@@ -185,6 +199,15 @@ export function MapScreen() {
                 : 'Add your vehicle'}
             </Text>
           </Pressable>
+
+          <Pressable
+            style={styles.tripChip}
+            onPress={() => (trip.route ? trip.clear() : setPlanningTrip(true))}
+            accessibilityRole="button"
+            accessibilityLabel={trip.route ? 'Clear the planned trip' : 'Plan a trip'}
+          >
+            <Text style={styles.tripText}>{trip.route ? '✕ Trip' : '🧭 Plan trip'}</Text>
+          </Pressable>
         </View>
 
         {deal && (
@@ -208,6 +231,23 @@ export function MapScreen() {
       <View style={styles.attribution} pointerEvents="none">
         <Text style={styles.attributionText}>Prices: {activeFeed.name} · Ratings by drivers</Text>
       </View>
+
+      {/* The trip plan takes the sheet slot; a tapped station supersedes it. */}
+      {trip.route && trip.plan && !selected && (
+        <View style={styles.sheetWrapper}>
+          <TripPlanSheet
+            route={trip.route}
+            plan={trip.plan}
+            onClose={trip.clear}
+            onSelectStop={(station) => setSelectedId(station.id)}
+            onAccept={() => {
+              if (trip.plan?.feasible && trip.plan.stops.length > 0) {
+                openDirections(trip.plan.stops[0].station);
+              }
+            }}
+          />
+        </View>
+      )}
 
       {selected && (
         <View style={styles.sheetWrapper}>
@@ -240,6 +280,17 @@ export function MapScreen() {
           onClose={() => setRating(undefined)}
         />
       )}
+
+      <TripModal
+        visible={planningTrip}
+        loading={trip.loading}
+        error={trip.error}
+        onPlan={async (destination) => {
+          await trip.start(destination);
+          setPlanningTrip(false);
+        }}
+        onClose={() => setPlanningTrip(false)}
+      />
 
       <VehicleModal
         visible={editingVehicle}
@@ -307,8 +358,26 @@ const styles = StyleSheet.create({
   },
   rangeBar: {
     flexDirection: 'row',
+    gap: spacing.sm,
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
+  },
+  tripChip: {
+    justifyContent: 'center',
+    backgroundColor: colors.text,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  tripText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   rangeChip: {
     flexDirection: 'row',
