@@ -33,6 +33,7 @@ import { useTrip } from '../hooks/useTrip';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
 import { useVehicle } from '../hooks/useVehicle';
 import { formatPrice } from '../lib/pricing';
+import { buildDirectionsUrl, type NavApp } from '../lib/navHandoff';
 import { ratingDollarsFor } from '../lib/tripPlanner';
 import { estimateRange, formatLevel, formatMiles } from '../lib/range';
 import {
@@ -124,19 +125,20 @@ export function MapScreen() {
   // Takes the minimum a destination needs, so saved favorites — which carry no
   // prices — can be navigated to without being inflated into full stations.
   const openDirections = (place: Pick<Station, 'name' | 'address' | 'coordinate'>) => {
-    const { latitude, longitude } = place.coordinate;
-    const label = encodeURIComponent(`${place.name}, ${place.address}`);
+    // Guzzler plans; the driver's own nav executes. Apple Maps is guaranteed
+    // present on iOS, Google Maps is the safe default elsewhere — letting the
+    // driver pick their nav app is the obvious next step.
+    const app: NavApp = Platform.OS === 'ios' ? 'apple' : 'google';
 
-    // Hand off to the platform's own maps app rather than routing in-app: turn
-    // by turn is a solved problem and not where Guzzler adds value.
-    const url = Platform.select({
-      ios: `maps://app?daddr=${latitude},${longitude}&q=${label}`,
-      android: `google.navigation:q=${latitude},${longitude}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
+    const { url } = buildDirectionsUrl(app, {
+      destination: place.coordinate,
+      label: `${place.name}, ${place.address}`,
     });
 
     Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
+      // Falls back to the Google web URL, which resolves in any browser.
+      const fallback = buildDirectionsUrl('google', { destination: place.coordinate });
+      Linking.openURL(fallback.url);
     });
   };
 

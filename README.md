@@ -9,6 +9,10 @@ you are — the thing a traveler passing through can't know on their own.
 > map. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for provider options and
 > how to swap one in.
 
+**How it fits together:** we plan, the driver executes in their own nav app, and
+we speak at key moments. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — including
+why not being the nav app is the strategy rather than a limitation.
+
 ## What's here
 
 - **Price-first map pins.** The price is on the pin, not behind a tap, and pin
@@ -76,7 +80,7 @@ keys, so the map works there without setup.
 
 ```bash
 npm run verify      # typecheck + tests
-npm test            # 107 tests
+npm test            # 143 tests
 npm run typecheck
 ```
 
@@ -99,6 +103,9 @@ src/
     value.ts            Value scoring, rank modes, filtering, range deals
     range.ts            Tank → miles, haversine distance, reachability
     approach.ts         Favorite-approach detection with hysteresis
+    navHandoff.ts       Per-app directions links and their waypoint caps
+    tripProgress.ts     Leg progression inferred from position alone
+    moments.ts          What earns an interruption, and the hourly budget
     route.ts            Projecting stations onto a route, corridor filtering
     tripPlanner.ts      Shortest-path DP over corridor stations
   hooks/
