@@ -1,23 +1,27 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import {
-  formatAge,
-  formatPrice,
-  priceFor,
-  savingsPerTank,
-  verdictFor,
-} from '../lib/pricing';
+import { formatAge, formatPrice, priceFor, savingsPerTank, verdictFor } from '../lib/pricing';
+import { formatRating, type RankedStation, type RankMode } from '../lib/value';
 import { colors, radius, spacing, verdictColor, verdictLabel } from '../theme';
-import { FUEL_GRADE_LABELS, type FuelGrade, type Station } from '../types';
+import {
+  AMENITY_ICONS,
+  AMENITY_LABELS,
+  FUEL_GRADE_LABELS,
+  type FuelGrade,
+  type Station,
+} from '../types';
+import { StarRating } from './StarRating';
 
 interface StationSheetProps {
-  station: Station;
+  ranked: RankedStation;
   grade: FuelGrade;
   median: number | undefined;
+  mode: RankMode;
   onClose: () => void;
   onNavigate: (station: Station) => void;
   /** Omitted for read-only feeds, which hide the report affordance. */
   onReport?: (station: Station) => void;
+  onRate?: (station: Station) => void;
 }
 
 /**
@@ -26,17 +30,21 @@ interface StationSheetProps {
  * tells a traveler whether to pull in here or keep driving.
  */
 export function StationSheet({
-  station,
+  ranked,
   grade,
   median,
+  mode,
   onClose,
   onNavigate,
   onReport,
+  onRate,
 }: StationSheetProps) {
+  const { station } = ranked;
   const quote = station.prices[grade];
   const price = priceFor(station, grade);
   const verdict = verdictFor(price, median);
   const savings = savingsPerTank(price, median);
+  const { restroom, overall, reviewCount } = station.ratings;
 
   return (
     <View style={styles.sheet}>
@@ -64,6 +72,12 @@ export function StationSheet({
             {quote?.source === 'crowdsourced' ? ' · driver report' : ''}
           </Text>
         </View>
+        {mode === 'value' && ranked.value !== undefined && (
+          <View style={styles.valueBadge}>
+            <Text style={styles.valueScore}>{ranked.value}</Text>
+            <Text style={styles.valueCaption}>value</Text>
+          </View>
+        )}
       </View>
 
       <View style={[styles.verdictPill, { backgroundColor: verdictColor[verdict] }]}>
@@ -76,6 +90,55 @@ export function StationSheet({
             ? `Save about $${savings.toFixed(2)} on a 14-gallon fill-up here.`
             : `Costs about $${Math.abs(savings).toFixed(2)} more than a typical nearby stop.`}
         </Text>
+      )}
+
+      {/* Driver ratings. Separate from anything an advertiser can buy. */}
+      <View style={styles.ratings}>
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>🚻 Restroom</Text>
+          <View style={styles.ratingValue}>
+            <StarRating value={restroom} size={14} />
+            <Text style={styles.ratingNumber}>{formatRating(restroom)}</Text>
+          </View>
+        </View>
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>Overall stop</Text>
+          <View style={styles.ratingValue}>
+            <StarRating value={overall} size={14} />
+            <Text style={styles.ratingNumber}>{formatRating(overall)}</Text>
+          </View>
+        </View>
+        <Text style={styles.reviewCount}>
+          {reviewCount === 0
+            ? 'No driver ratings yet — be the first.'
+            : `${reviewCount} driver rating${reviewCount === 1 ? '' : 's'}`}
+        </Text>
+      </View>
+
+      {station.amenities.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.amenities}
+        >
+          {station.amenities.map((amenity) => (
+            <View key={amenity} style={styles.amenityChip}>
+              <Text style={styles.amenityIcon}>{AMENITY_ICONS[amenity]}</Text>
+              <Text style={styles.amenityLabel}>{AMENITY_LABELS[amenity]}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/*
+        Paid placement. The label is not optional: an offer rendered without it
+        is an undisclosed ad, and the ranking above it stays untouched either way.
+      */}
+      {station.sponsored?.offer && (
+        <View style={styles.sponsored}>
+          <Text style={styles.sponsoredTag}>SPONSORED</Text>
+          <Text style={styles.sponsoredOffer}>{station.sponsored.offer}</Text>
+        </View>
       )}
 
       <View style={styles.actions}>
@@ -93,6 +156,15 @@ export function StationSheet({
             accessibilityRole="button"
           >
             <Text style={styles.buttonSecondaryText}>Report price</Text>
+          </Pressable>
+        )}
+        {onRate && (
+          <Pressable
+            style={[styles.button, styles.buttonSecondary]}
+            onPress={() => onRate(station)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.buttonSecondaryText}>Rate stop</Text>
           </Pressable>
         )}
       </View>
@@ -150,6 +222,7 @@ const styles = StyleSheet.create({
   },
   priceMeta: {
     marginLeft: spacing.md,
+    flex: 1,
   },
   gradeLabel: {
     fontSize: 14,
@@ -160,6 +233,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 1,
+  },
+  valueBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  valueScore: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  valueCaption: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
   },
   verdictPill: {
     alignSelf: 'flex-start',
@@ -178,6 +272,84 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.md,
     lineHeight: 20,
+  },
+  ratings: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  ratingLabel: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  ratingValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  ratingNumber: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+    minWidth: 24,
+    textAlign: 'right',
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  amenities: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  amenityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  amenityIcon: {
+    fontSize: 12,
+    marginRight: spacing.xs,
+  },
+  amenityLabel: {
+    fontSize: 12,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  sponsored: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  sponsoredTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  sponsoredOffer: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+    marginTop: 2,
   },
   actions: {
     flexDirection: 'row',
@@ -206,6 +378,6 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     color: colors.text,
     fontWeight: '600',
-    fontSize: 15,
+    fontSize: 14,
   },
 });

@@ -1,4 +1,15 @@
-import { FUEL_GRADES, type FuelGrade, type PriceQuote, type PriceReport, type Region, type Station } from '../types';
+import {
+  AMENITIES,
+  FUEL_GRADES,
+  type Amenity,
+  type FuelGrade,
+  type PriceQuote,
+  type PriceReport,
+  type RatingSubmission,
+  type Region,
+  type Station,
+  type StationRatings,
+} from '../types';
 import type { PriceFeed } from './priceFeed';
 
 /**
@@ -38,6 +49,31 @@ const BRANDS = [
   'Valero',
   "Buc-ee's",
 ];
+
+/**
+ * Rough per-brand quality multiplier, so generated amenities and ratings track
+ * the reputations drivers already have. Keeps the demo data from looking like
+ * uniform noise.
+ */
+const BRAND_QUALITY: Record<string, number> = {
+  "Buc-ee's": 1,
+  Costco: 0.95,
+  Shell: 0.85,
+  Chevron: 0.85,
+  BP: 0.8,
+  Mobil: 0.8,
+  Exxon: 0.78,
+  '76': 0.72,
+  Sunoco: 0.72,
+  'Circle K': 0.7,
+  Valero: 0.68,
+  Arco: 0.6,
+};
+
+/** Keeps a generated rating inside the 1-5 scale. */
+function clampRating(value: number): number {
+  return Math.round(Math.min(5, Math.max(1, value)) * 10) / 10;
+}
 
 const STREETS = [
   'Main St',
@@ -99,14 +135,17 @@ function stationsInCell(cellX: number, cellY: number): Station[] {
     const regular = BASE_REGULAR_PRICE + (priceRoll - 0.5) * 0.9;
 
     const prices: Partial<Record<FuelGrade, PriceQuote>> = {};
-    for (const grade of FUEL_GRADES) {
+    // Seeded by index, not by name: several grade and amenity names share a
+    // character count, and seeding on length made those collide into perfectly
+    // correlated draws.
+    for (const [gradeIndex, grade] of FUEL_GRADES.entries()) {
       // Not every station sells every grade; diesel is the usual omission.
-      const carriesGrade = grade === 'regular' || seededRandom(cellX, cellY, i, grade.length, 8) > 0.2;
+      const carriesGrade = grade === 'regular' || seededRandom(cellX, cellY, i, gradeIndex, 8) > 0.2;
       if (!carriesGrade) continue;
 
       // Ages range from minutes to ~18 hours old, so the freshness UI has
       // something to distinguish.
-      const ageHours = seededRandom(cellX, cellY, i, grade.length, 9) * 18;
+      const ageHours = seededRandom(cellX, cellY, i, gradeIndex, 9) * 18;
 
       prices[grade] = {
         grade,
@@ -115,6 +154,31 @@ function stationsInCell(cellX: number, cellY: number): Station[] {
         source: ageRoll > 0.6 ? 'crowdsourced' : 'feed',
       };
     }
+
+    const amenities: Amenity[] = [];
+    for (const [amenityIndex, amenity] of AMENITIES.entries()) {
+      const roll = seededRandom(cellX, cellY, i, amenityIndex, 10);
+      // Restrooms are near-universal; EV charging and truck access are not.
+      const likelihood = amenity === 'restroom' ? 0.9 : amenity === 'evCharging' ? 0.25 : 0.55;
+      if (roll < likelihood * BRAND_QUALITY[brand]) amenities.push(amenity);
+    }
+
+    // Ratings track brand quality loosely, with real spread so the value
+    // ranking has something to separate.
+    const reviewRoll = seededRandom(cellX, cellY, i, 11);
+    const restroomRoll = seededRandom(cellX, cellY, i, 12);
+    const overallRoll = seededRandom(cellX, cellY, i, 13);
+    const reviewCount = Math.floor(reviewRoll * 120);
+
+    const ratings: StationRatings = { reviewCount };
+    if (reviewCount > 0) {
+      ratings.restroom = clampRating(1 + restroomRoll * 4 * BRAND_QUALITY[brand] + 0.5);
+      ratings.overall = clampRating(1 + overallRoll * 4 * BRAND_QUALITY[brand] + 0.5);
+    }
+
+    // A small slice of stations have bought a placement. This never touches
+    // the value score — it only earns the labeled treatment in the UI.
+    const sponsoredRoll = seededRandom(cellX, cellY, i, 14);
 
     stations.push({
       id: `mock-${cellX}-${cellY}-${i}`,
@@ -126,6 +190,11 @@ function stationsInCell(cellX: number, cellY: number): Station[] {
         longitude: (cellX + lngJitter) * CELL_SIZE,
       },
       prices,
+      amenities,
+      ratings,
+      ...(sponsoredRoll > 0.85
+        ? { sponsored: { advertiser: brand, offer: '10¢/gal off in the app' } }
+        : {}),
     });
   }
   return stations;
@@ -136,6 +205,9 @@ export class MockPriceFeed implements PriceFeed {
 
   /** Reports submitted this session, applied on top of generated prices. */
   private readonly reports = new Map<string, PriceQuote>();
+
+  /** Ratings submitted this session, folded into generated ratings. */
+  private readonly ratings = new Map<string, RatingSubmission>();
 
   async getStationsInRegion(region: Region): Promise<Station[]> {
     // Simulate the latency a real network feed would have.
@@ -160,7 +232,7 @@ export class MockPriceFeed implements PriceFeed {
     for (let y = minCellY; y <= maxCellY; y++) {
       for (let x = minCellX; x <= maxCellX; x++) {
         for (const station of stationsInCell(x, y)) {
-          stations.push(this.applyReports(station));
+          stations.push(this.applyRatings(this.applyReports(station)));
         }
       }
     }
@@ -175,6 +247,39 @@ export class MockPriceFeed implements PriceFeed {
       reportedAt: report.reportedAt,
       source: 'crowdsourced',
     });
+  }
+
+  async submitRating(rating: RatingSubmission): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    this.ratings.set(rating.stationId, rating);
+  }
+
+  /**
+   * Folds a session-local rating into a station's generated ratings.
+   *
+   * Averaged against the existing score weighted by review count, rather than
+   * replacing it, so one rating moves a well-reviewed station only slightly —
+   * the same behavior a real backend would need.
+   */
+  private applyRatings(station: Station): Station {
+    const submitted = this.ratings.get(station.id);
+    if (!submitted) return station;
+
+    const { reviewCount } = station.ratings;
+    const blend = (existing: number | undefined, incoming: number | undefined) => {
+      if (incoming === undefined) return existing;
+      if (existing === undefined || reviewCount === 0) return incoming;
+      return Math.round(((existing * reviewCount + incoming) / (reviewCount + 1)) * 10) / 10;
+    };
+
+    return {
+      ...station,
+      ratings: {
+        restroom: blend(station.ratings.restroom, submitted.restroom),
+        overall: blend(station.ratings.overall, submitted.overall),
+        reviewCount: reviewCount + 1,
+      },
+    };
   }
 
   /** Overlays any session-local reports onto a generated station. */

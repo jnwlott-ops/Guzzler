@@ -2,29 +2,35 @@ import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 
-import { formatPinPrice, priceFor, verdictFor, type PriceVerdict } from '../lib/pricing';
-import { colors, radius, verdictColor } from '../theme';
-import type { FuelGrade, Station } from '../types';
+import { formatPinPrice, type PriceVerdict } from '../lib/pricing';
+import { radius, verdictColor } from '../theme';
+import type { Station } from '../types';
 
 interface StationMarkerProps {
   station: Station;
-  grade: FuelGrade;
-  /** Local median for the visible region, used to classify this station. */
-  median: number | undefined;
-  /** Cheapest station in view gets a crown and a heavier outline. */
-  isCheapest: boolean;
+  price: number | undefined;
+  /** Precomputed by the active rank mode, so the pin stays presentational. */
+  verdict: PriceVerdict;
+  /** Best station in view under the active mode. */
+  isBest: boolean;
+  /** Shows the sponsored dot. Never affects color, size, or ranking. */
+  isSponsored: boolean;
   onPress: (station: Station) => void;
 }
 
 /**
  * A price-first map pin: the number is the point, so it goes in the pin itself
- * rather than hiding behind a tap. Color carries the verdict, and the cheapest
- * pin gets a star so the best option is findable without reading every pin.
+ * rather than hiding behind a tap. Color carries the verdict, and the best pin
+ * gets a star so the top option is findable without reading every pin.
  */
-function StationMarkerComponent({ station, grade, median, isCheapest, onPress }: StationMarkerProps) {
-  const price = priceFor(station, grade);
-  const verdict: PriceVerdict = verdictFor(price, median);
-
+function StationMarkerComponent({
+  station,
+  price,
+  verdict,
+  isBest,
+  isSponsored,
+  onPress,
+}: StationMarkerProps) {
   return (
     <Marker
       coordinate={station.coordinate}
@@ -37,11 +43,14 @@ function StationMarkerComponent({ station, grade, median, isCheapest, onPress }:
           style={[
             styles.bubble,
             { backgroundColor: verdictColor[verdict] },
-            isCheapest && styles.bubbleCheapest,
+            isBest && styles.bubbleBest,
           ]}
         >
-          {isCheapest && <Text style={styles.star}>★</Text>}
+          {isBest && <Text style={styles.star}>★</Text>}
           <Text style={styles.price}>{formatPinPrice(price)}</Text>
+          {/* A quiet marker that an offer is attached — deliberately not a
+              visual promotion, since position and prominence aren't for sale. */}
+          {isSponsored && <View style={styles.sponsoredDot} />}
         </View>
         <View style={[styles.tail, { borderTopColor: verdictColor[verdict] }]} />
       </View>
@@ -62,7 +71,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
   },
-  bubbleCheapest: {
+  bubbleBest: {
     borderColor: '#FFFFFF',
     borderWidth: 2.5,
   },
@@ -77,6 +86,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     // Tabular figures keep pins the same width as prices tick up and down.
     fontVariant: ['tabular-nums'],
+  },
+  sponsoredDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    marginLeft: 4,
   },
   tail: {
     width: 0,

@@ -1,4 +1,4 @@
-import type { PriceReport, Region, Station } from '../types';
+import type { PriceReport, RatingSubmission, Region, Station } from '../types';
 
 /**
  * The single seam between Guzzler and whoever supplies its prices.
@@ -26,6 +26,15 @@ export interface PriceFeed {
    * the UI hides the report affordance when it is absent.
    */
   submitReport?(report: PriceReport): Promise<void>;
+
+  /**
+   * Submit a driver's rating of a stop. Optional for the same reason.
+   *
+   * Ratings are ours regardless of who supplies prices — a licensed price feed
+   * has no opinion on whether the restroom is clean — so in production this
+   * will likely hit our own backend even when prices come from a third party.
+   */
+  submitRating?(rating: RatingSubmission): Promise<void>;
 }
 
 import { MockPriceFeed } from './mockPriceFeed';

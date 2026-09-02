@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { activeFeed } from '../data/priceFeed';
-import type { PriceReport, Region, Station } from '../types';
+import type { PriceReport, RatingSubmission, Region, Station } from '../types';
 
 export interface StationsState {
   stations: Station[];
   loading: boolean;
   error: string | undefined;
-  /** Submits a price and refreshes the current region. No-op on read-only feeds. */
+  /** Submits a price and refreshes the current region. Undefined on read-only feeds. */
   reportPrice: ((report: PriceReport) => Promise<void>) | undefined;
+  /** Submits a driver rating and refreshes. Undefined when the feed can't take them. */
+  rateStation: ((rating: RatingSubmission) => Promise<void>) | undefined;
 }
 
 /** Wait this long after the map stops moving before fetching, to avoid a
@@ -70,9 +72,10 @@ export function useStations(region: Region | undefined): StationsState {
     refreshToken,
   ]);
 
-  // Read-only feeds omit submitReport; the UI hides the report button when
-  // reportPrice comes back undefined.
+  // Read-only feeds omit these; the UI hides the matching affordance when the
+  // corresponding callback comes back undefined.
   const canReport = typeof activeFeed.submitReport === 'function';
+  const canRate = typeof activeFeed.submitRating === 'function';
 
   return {
     stations,
@@ -81,6 +84,12 @@ export function useStations(region: Region | undefined): StationsState {
     reportPrice: canReport
       ? async (report: PriceReport) => {
           await activeFeed.submitReport!(report);
+          setRefreshToken((token) => token + 1);
+        }
+      : undefined,
+    rateStation: canRate
+      ? async (rating: RatingSubmission) => {
+          await activeFeed.submitRating!(rating);
           setRefreshToken((token) => token + 1);
         }
       : undefined,

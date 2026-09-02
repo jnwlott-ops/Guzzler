@@ -1,36 +1,37 @@
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AmenityFilter } from '../components/AmenityFilter';
 import { GradeSelector } from '../components/GradeSelector';
+import { RankModeToggle } from '../components/RankModeToggle';
+import { RateStationModal } from '../components/RateStationModal';
 import { ReportPriceModal } from '../components/ReportPriceModal';
 import { StationMarker } from '../components/StationMarker';
 import { StationSheet } from '../components/StationSheet';
 import { activeFeed } from '../data/priceFeed';
 import { useStations } from '../hooks/useStations';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
-import { cheapestStation, formatPrice, medianPrice } from '../lib/pricing';
+import { formatPrice } from '../lib/pricing';
+import { matchesFilters, rankStations, verdictForMode, type RankMode } from '../lib/value';
 import { colors, radius, spacing } from '../theme';
-import type { FuelGrade, Region, Station } from '../types';
+import type { Amenity, FuelGrade, Region, Station } from '../types';
 
-/** Roughly a 3-mile window — close enough that walking/short detours make sense. */
+/** Roughly a 3-mile window — close enough that short detours make sense. */
 const DEFAULT_DELTA = 0.05;
 
 export function MapScreen() {
   const insets = useSafeAreaInsets();
   const { location, status } = useUserLocation();
+
   const [grade, setGrade] = useState<FuelGrade>('regular');
+  const [mode, setMode] = useState<RankMode>('price');
+  const [filters, setFilters] = useState<Amenity[]>([]);
   const [region, setRegion] = useState<Region | undefined>();
-  const [selected, setSelected] = useState<Station | undefined>();
+  const [selectedId, setSelectedId] = useState<string | undefined>();
   const [reporting, setReporting] = useState<Station | undefined>();
+  const [rating, setRating] = useState<Station | undefined>();
 
   const initialRegion: Region = {
     ...(location ?? FALLBACK_LOCATION),
@@ -38,11 +39,30 @@ export function MapScreen() {
     longitudeDelta: DEFAULT_DELTA,
   };
 
-  // Until the map reports its first region, price against where we're starting.
-  const { stations, loading, error, reportPrice } = useStations(region ?? initialRegion);
+  const { stations, loading, error, reportPrice, rateStation } = useStations(
+    region ?? initialRegion,
+  );
 
-  const median = useMemo(() => medianPrice(stations, grade), [stations, grade]);
-  const cheapest = useMemo(() => cheapestStation(stations, grade), [stations, grade]);
+  // Filter before ranking, so "cheapest" means cheapest among stops that
+  // actually meet the user's requirements — not cheapest overall with the
+  // usable ones hidden behind it.
+  const visible = useMemo(
+    () => stations.filter((station) => matchesFilters(station, filters)),
+    [stations, filters],
+  );
+
+  const { ranked, median, best } = useMemo(
+    () => rankStations(visible, grade, mode),
+    [visible, grade, mode],
+  );
+
+  const selected = ranked.find((r) => r.station.id === selectedId);
+
+  const toggleFilter = (amenity: Amenity) => {
+    setFilters((current) =>
+      current.includes(amenity) ? current.filter((a) => a !== amenity) : [...current, amenity],
+    );
+  };
 
   const openDirections = (station: Station) => {
     const { latitude, longitude } = station.coordinate;
@@ -57,9 +77,7 @@ export function MapScreen() {
     });
 
     Linking.openURL(url).catch(() => {
-      Linking.openURL(
-        `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
-      );
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`);
     });
   };
 
@@ -74,16 +92,17 @@ export function MapScreen() {
         onRegionChangeComplete={setRegion}
         showsUserLocation={status === 'granted'}
         showsMyLocationButton
-        onPress={() => setSelected(undefined)}
+        onPress={() => setSelectedId(undefined)}
       >
-        {stations.map((station) => (
+        {ranked.map((entry) => (
           <StationMarker
-            key={station.id}
-            station={station}
-            grade={grade}
-            median={median}
-            isCheapest={station.id === cheapest?.id}
-            onPress={setSelected}
+            key={entry.station.id}
+            station={entry.station}
+            price={entry.price}
+            verdict={verdictForMode(entry, mode)}
+            isBest={entry.isBest}
+            isSponsored={entry.station.sponsored !== undefined}
+            onPress={(station) => setSelectedId(station.id)}
           />
         ))}
       </MapView>
@@ -91,11 +110,18 @@ export function MapScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top }]} pointerEvents="box-none">
         <View style={styles.topCard}>
           <GradeSelector value={grade} onChange={setGrade} />
+          <View style={styles.modeRow}>
+            <RankModeToggle value={mode} onChange={setMode} />
+          </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summary}>
+            <Text style={styles.summary} numberOfLines={1}>
               {median !== undefined
-                ? `Local median ${formatPrice(median)} · ${stations.length} stations`
-                : 'No prices in view'}
+                ? mode === 'value' && best
+                  ? `Best value: ${best.station.name} · ${formatPrice(best.price)}`
+                  : `Local median ${formatPrice(median)} · ${ranked.length} stations`
+                : filters.length > 0
+                  ? 'No stops match those filters'
+                  : 'No prices in view'}
             </Text>
             {loading && <ActivityIndicator size="small" color={colors.textMuted} />}
           </View>
@@ -106,21 +132,27 @@ export function MapScreen() {
             </Text>
           )}
         </View>
+
+        <View style={styles.filterBar}>
+          <AmenityFilter selected={filters} onToggle={toggleFilter} />
+        </View>
       </View>
 
       <View style={styles.attribution} pointerEvents="none">
-        <Text style={styles.attributionText}>Prices: {activeFeed.name}</Text>
+        <Text style={styles.attributionText}>Prices: {activeFeed.name} · Ratings by drivers</Text>
       </View>
 
       {selected && (
         <View style={styles.sheetWrapper}>
           <StationSheet
-            station={selected}
+            ranked={selected}
             grade={grade}
             median={median}
-            onClose={() => setSelected(undefined)}
+            mode={mode}
+            onClose={() => setSelectedId(undefined)}
             onNavigate={openDirections}
             onReport={reportPrice ? setReporting : undefined}
+            onRate={rateStation ? setRating : undefined}
           />
         </View>
       )}
@@ -131,6 +163,14 @@ export function MapScreen() {
           grade={grade}
           onSubmit={reportPrice}
           onClose={() => setReporting(undefined)}
+        />
+      )}
+
+      {rateStation && (
+        <RateStationModal
+          station={rating}
+          onSubmit={rateStation}
+          onClose={() => setRating(undefined)}
         />
       )}
     </View>
@@ -149,7 +189,8 @@ const styles = StyleSheet.create({
     right: 0,
   },
   topCard: {
-    margin: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
     padding: spacing.md,
     backgroundColor: colors.background,
     borderRadius: radius.lg,
@@ -159,13 +200,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
+  modeRow: {
+    marginTop: spacing.sm,
+  },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
   summary: {
+    flex: 1,
     fontSize: 13,
     color: colors.textMuted,
     fontWeight: '600',
@@ -179,6 +225,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: spacing.xs,
+  },
+  filterBar: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   attribution: {
     position: 'absolute',
