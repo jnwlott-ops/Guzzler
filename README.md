@@ -19,9 +19,16 @@ you are — the thing a traveler passing through can't know on their own.
   they can't buy. See [docs/RANKING.md](docs/RANKING.md).
 - **Median, not mean.** One $6.00 highway-exit gouger shouldn't drag the
   "normal" price up and make itself look reasonable.
-- **Amenities and restroom ratings.** Drivers rate restrooms and the stop
-  overall; amenity chips filter the map down to stops that have what you need
-  (truck access, EV charging, food, open 24h).
+- **Amenities, restroom and food ratings.** Drivers rate restrooms, food and
+  the stop overall in 1-5 pumps; amenity chips filter the map down to stops that
+  have what you need (truck access, EV charging, food, open 24h).
+- **You set the dial.** Cheapest / Balanced / Best stops decides how hard price
+  is traded against what the stop is actually like — on the map and in the trip
+  planner alike. The old 65/35 split is now just the default.
+- **Favorites that warn you in time.** Star a stop and Guzzler tells you about
+  two minutes before you reach it, with hysteresis so it doesn't flap at the
+  boundary. See [docs/FAVORITES.md](docs/FAVORITES.md) — including why this is
+  foreground-only today.
 - **Range rings.** Enter your tank size, MPG and current level, and the map
   shows how far you can actually get. Stations beyond it are flagged, and an
   unreachable station can never be ranked "best." See [docs/RANGE.md](docs/RANGE.md)
@@ -69,7 +76,7 @@ keys, so the map works there without setup.
 
 ```bash
 npm run verify      # typecheck + tests
-npm test            # 84 tests
+npm test            # 107 tests
 npm run typecheck
 ```
 
@@ -91,12 +98,16 @@ src/
     pricing.ts          Median, verdicts, savings, formatting
     value.ts            Value scoring, rank modes, filtering, range deals
     range.ts            Tank → miles, haversine distance, reachability
+    approach.ts         Favorite-approach detection with hysteresis
     route.ts            Projecting stations onto a route, corridor filtering
     tripPlanner.ts      Shortest-path DP over corridor stations
   hooks/
     useUserLocation.ts  Foreground location, with denial as a normal path
     useStations.ts      Debounced region → stations, with abort on pan
     useVehicle.ts       Vehicle profile, persisted to AsyncStorage
+    usePreferences.ts   Price-vs-quality dial, persisted
+    useFavorites.ts     Saved places, persisted
+    useApproachAlerts.ts Foreground approach detection
     useTrip.ts          Route fetch + stop planning
   components/           Map pin, selectors, filters, station sheet, modals
   screens/MapScreen.tsx Composition root

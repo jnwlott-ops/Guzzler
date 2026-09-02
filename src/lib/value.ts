@@ -10,12 +10,12 @@ import type { Amenity, FuelGrade, LatLng, Station } from '../types';
 export type RankMode = 'price' | 'value';
 
 /**
- * How much of the value score price accounts for. The rest comes from driver
- * ratings. Price stays dominant on purpose — this is still a gas-price app, and
- * a spotless restroom shouldn't rescue a station charging 80 cents over.
+ * Default share of the value score that price accounts for; the rest comes from
+ * driver ratings. The driver can move this — someone on a budget road trip and
+ * someone hunting a decent lunch want different answers from the same map — so
+ * every scoring function takes it as a parameter rather than reading a constant.
  */
-const PRICE_WEIGHT = 0.65;
-const RATING_WEIGHT = 1 - PRICE_WEIGHT;
+export const DEFAULT_PRICE_WEIGHT = 0.65;
 
 /**
  * Ratings below this many reviews get pulled toward neutral, so one glowing
@@ -75,14 +75,15 @@ function pricePoints(price: number, min: number, max: number): number {
  * A 5.0 from two people lands well short of a 4.6 from fifty — the shrinkage
  * toward neutral is what stops a handful of reviews from deciding the ranking.
  */
-function ratingPoints(station: Station): number {
-  const { overall, restroom, reviewCount } = station.ratings;
+export function ratingPoints(station: Station): number {
+  const { overall, restroom, food, reviewCount } = station.ratings;
 
-  const scores = [overall, restroom].filter((s): s is number => s !== undefined);
+  // Restroom and food are weighted equally with overall: they are the two
+  // things travelers actually pick stops on, and they're what no price feed
+  // can sell us. A stop with no food rating simply isn't judged on food.
+  const scores = [overall, restroom, food].filter((s): s is number => s !== undefined);
   if (scores.length === 0 || reviewCount === 0) return NEUTRAL;
 
-  // Restroom is weighted equally with overall: it is the thing travelers
-  // actually pick stops on, and it's what makes this ranking worth having.
   const mean = scores.reduce((sum, s) => sum + s, 0) / scores.length;
   const raw = ((mean - 1) / 4) * 100;
 
@@ -102,11 +103,16 @@ export function valueScore(
   grade: FuelGrade,
   minPrice: number,
   maxPrice: number,
+  priceWeight: number = DEFAULT_PRICE_WEIGHT,
 ): number | undefined {
   const price = priceFor(station, grade);
   if (price === undefined) return undefined;
 
-  const score = pricePoints(price, minPrice, maxPrice) * PRICE_WEIGHT + ratingPoints(station) * RATING_WEIGHT;
+  // Clamped so a bad preference value can't produce a score outside 0-100.
+  const weight = Math.min(1, Math.max(0, priceWeight));
+
+  const score =
+    pricePoints(price, minPrice, maxPrice) * weight + ratingPoints(station) * (1 - weight);
   return Math.round(score);
 }
 
@@ -134,6 +140,7 @@ export function rankStations(
   grade: FuelGrade,
   mode: RankMode,
   reach?: ReachContext,
+  priceWeight: number = DEFAULT_PRICE_WEIGHT,
 ): RankingResult {
   const median = medianPrice(stations, grade);
 
@@ -152,7 +159,7 @@ export function rankStations(
     return {
       station,
       price: priceFor(station, grade),
-      value: valueScore(station, grade, minPrice, maxPrice),
+      value: valueScore(station, grade, minPrice, maxPrice, priceWeight),
       distance,
       reachability:
         distance === undefined

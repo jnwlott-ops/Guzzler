@@ -174,6 +174,13 @@ function stationsInCell(cellX: number, cellY: number): Station[] {
     if (reviewCount > 0) {
       ratings.restroom = clampRating(1 + restroomRoll * 4 * BRAND_QUALITY[brand] + 0.5);
       ratings.overall = clampRating(1 + overallRoll * 4 * BRAND_QUALITY[brand] + 0.5);
+
+      // Only stops that actually sell food get a food rating — a bare pump
+      // island has nothing to judge.
+      if (amenities.includes('food')) {
+        const foodRoll = seededRandom(cellX, cellY, i, 15);
+        ratings.food = clampRating(1 + foodRoll * 4 * BRAND_QUALITY[brand] + 0.5);
+      }
     }
 
     // A small slice of stations have bought a placement. This never touches
@@ -276,6 +283,7 @@ export class MockPriceFeed implements PriceFeed {
       ...station,
       ratings: {
         restroom: blend(station.ratings.restroom, submitted.restroom),
+        food: blend(station.ratings.food, submitted.food),
         overall: blend(station.ratings.overall, submitted.overall),
         reviewCount: reviewCount + 1,
       },

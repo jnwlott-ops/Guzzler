@@ -20,19 +20,21 @@ interface RateStationModalProps {
  */
 export function RateStationModal({ station, onSubmit, onClose }: RateStationModalProps) {
   const [restroom, setRestroom] = useState<number | undefined>();
+  const [food, setFood] = useState<number | undefined>();
   const [overall, setOverall] = useState<number | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const close = () => {
     setRestroom(undefined);
+    setFood(undefined);
     setOverall(undefined);
     setError(undefined);
     onClose();
   };
 
   const submit = async () => {
-    if (restroom === undefined && overall === undefined) {
+    if (restroom === undefined && food === undefined && overall === undefined) {
       setError('Rate at least one thing.');
       return;
     }
@@ -43,6 +45,7 @@ export function RateStationModal({ station, onSubmit, onClose }: RateStationModa
       await onSubmit({
         stationId: station.id,
         restroom,
+        food,
         overall,
         submittedAt: new Date().toISOString(),
       });
@@ -65,6 +68,11 @@ export function RateStationModal({ station, onSubmit, onClose }: RateStationModa
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Restroom</Text>
             <RatingScale value={restroom} onChange={setRestroom} size={30} label="Restroom rating" />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Food</Text>
+            <RatingScale value={food} onChange={setFood} size={30} label="Food rating" />
           </View>
 
           <View style={styles.field}>

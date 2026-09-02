@@ -100,16 +100,40 @@ export const AMENITY_ICONS: Record<Amenity, string> = {
 export interface StationRatings {
   /** Restroom quality — the amenity travelers actually choose stops on. */
   restroom?: number;
+  /** Food quality, where the stop has any worth eating. */
+  food?: number;
   /** Overall stop quality. */
   overall?: number;
   /** How many drivers have weighed in. Low counts get hedged in the UI. */
   reviewCount: number;
 }
 
+/**
+ * How much the driver cares about price versus what the stop is actually like.
+ *
+ * `priceWeight` is the fraction of the value score price accounts for; the rest
+ * comes from driver ratings. Someone on a budget road trip and someone hunting
+ * a decent lunch want genuinely different answers from the same map, so this is
+ * theirs to set rather than ours to assume.
+ */
+export interface Preferences {
+  priceWeight: number;
+}
+
+/** The named settings the UI offers, rather than a raw number to fiddle with. */
+export const PRIORITY_PRESETS = [
+  { id: 'price', label: 'Cheapest', priceWeight: 0.85 },
+  { id: 'balanced', label: 'Balanced', priceWeight: 0.65 },
+  { id: 'quality', label: 'Best stops', priceWeight: 0.45 },
+] as const;
+
+export type PriorityPresetId = (typeof PRIORITY_PRESETS)[number]['id'];
+
 /** A rating a user submits for a station. */
 export interface RatingSubmission {
   stationId: string;
   restroom?: number;
+  food?: number;
   overall?: number;
   submittedAt: string;
 }

@@ -5,6 +5,7 @@ import type { Amenity, Station, Vehicle } from '../../types';
 interface StationOpts {
   overall?: number;
   restroom?: number;
+  food?: number;
   reviewCount?: number;
   sponsored?: boolean;
   amenities?: Amenity[];
@@ -23,7 +24,12 @@ const station = (id: string, price: number | undefined, opts: StationOpts = {}):
       ? {}
       : { regular: { grade: 'regular', price, reportedAt: new Date().toISOString(), source: 'feed' } },
   amenities: opts.amenities ?? [],
-  ratings: { overall: opts.overall, restroom: opts.restroom, reviewCount: opts.reviewCount ?? 0 },
+  ratings: {
+    overall: opts.overall,
+    restroom: opts.restroom,
+    food: opts.food,
+    reviewCount: opts.reviewCount ?? 0,
+  },
   ...(opts.sponsored ? { sponsored: { advertiser: id, offer: '10c off' } } : {}),
 });
 
@@ -230,5 +236,64 @@ describe('matchesFilters', () => {
     expect(matchesFilters(s, ['restroom', 'food'])).toBe(true);
     expect(matchesFilters(s, ['evCharging'])).toBe(false);
     expect(matchesFilters(s, ['restroom', 'evCharging'])).toBe(false);
+  });
+});
+
+describe('price-vs-quality weighting', () => {
+  const cheapGrim = station('cheap-grim', 3.0, { overall: 1, restroom: 1, reviewCount: 99 });
+  const dearLovely = station('dear-lovely', 4.0, { overall: 5, restroom: 5, food: 5, reviewCount: 99 });
+
+  it('defaults to price-dominant', () => {
+    expect(valueScore(cheapGrim, 'regular', 3, 4)!).toBeGreaterThan(
+      valueScore(dearLovely, 'regular', 3, 4)!,
+    );
+  });
+
+  it('lets a driver who prioritizes stops flip the answer', () => {
+    // At the "Best stops" preset, a spotless expensive stop should win.
+    const cheapest = rankStations([cheapGrim, dearLovely], 'regular', 'value', undefined, 0.85);
+    const bestStops = rankStations([cheapGrim, dearLovely], 'regular', 'value', undefined, 0.45);
+
+    expect(cheapest.best!.station.id).toBe('cheap-grim');
+    expect(bestStops.best!.station.id).toBe('dear-lovely');
+  });
+
+  it('moves the score monotonically with the weight', () => {
+    // More weight on price means a higher score for the cheap station.
+    const weights = [0.2, 0.4, 0.6, 0.8, 1];
+    const scores = weights.map((w) => valueScore(cheapGrim, 'regular', 3, 4, w)!);
+
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i]).toBeGreaterThanOrEqual(scores[i - 1]);
+    }
+  });
+
+  it('stays in range at the extremes', () => {
+    for (const weight of [0, 1, -5, 99]) {
+      for (const s of [cheapGrim, dearLovely]) {
+        const score = valueScore(s, 'regular', 3, 4, weight)!;
+        expect(score).toBeGreaterThanOrEqual(0);
+        expect(score).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it('counts a food rating alongside restroom and overall', () => {
+    const withFood = station('with-food', 3.5, { overall: 3, restroom: 3, food: 5, reviewCount: 99 });
+    const withoutFood = station('no-food', 3.5, { overall: 3, restroom: 3, reviewCount: 99 });
+
+    expect(valueScore(withFood, 'regular', 3, 4)!).toBeGreaterThan(
+      valueScore(withoutFood, 'regular', 3, 4)!,
+    );
+  });
+
+  it('does not judge a stop on food it does not serve', () => {
+    // No food rating must read as "not applicable", not as a zero.
+    const noFood = station('no-food', 3.5, { overall: 4, restroom: 4, reviewCount: 99 });
+    const badFood = station('bad-food', 3.5, { overall: 4, restroom: 4, food: 1, reviewCount: 99 });
+
+    expect(valueScore(noFood, 'regular', 3, 4)!).toBeGreaterThan(
+      valueScore(badFood, 'regular', 3, 4)!,
+    );
   });
 });

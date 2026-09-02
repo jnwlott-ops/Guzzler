@@ -23,6 +23,8 @@ interface StationSheetProps {
   /** Omitted for read-only feeds, which hide the report affordance. */
   onReport?: (station: Station) => void;
   onRate?: (station: Station) => void;
+  isFavorite: boolean;
+  onToggleFavorite: (station: Station) => void;
 }
 
 /**
@@ -39,13 +41,15 @@ export function StationSheet({
   onNavigate,
   onReport,
   onRate,
+  isFavorite,
+  onToggleFavorite,
 }: StationSheetProps) {
   const { station } = ranked;
   const quote = station.prices[grade];
   const price = priceFor(station, grade);
   const verdict = verdictFor(price, median);
   const savings = savingsPerTank(price, median);
-  const { restroom, overall, reviewCount } = station.ratings;
+  const { restroom, food, overall, reviewCount } = station.ratings;
 
   return (
     <View style={styles.sheet}>
@@ -57,6 +61,19 @@ export function StationSheet({
             {station.address}
           </Text>
         </View>
+        <Pressable
+          onPress={() => onToggleFavorite(station)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isFavorite }}
+          accessibilityLabel={
+            isFavorite ? `Remove ${station.name} from favorites` : `Save ${station.name}`
+          }
+        >
+          <Text style={[styles.favorite, isFavorite && styles.favoriteOn]}>
+            {isFavorite ? '★' : '☆'}
+          </Text>
+        </Pressable>
         <Pressable
           onPress={onClose}
           hitSlop={12}
@@ -121,6 +138,13 @@ export function StationSheet({
           <View style={styles.ratingValue}>
             <RatingScale value={restroom} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(restroom)}</Text>
+          </View>
+        </View>
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>🍔 Food</Text>
+          <View style={styles.ratingValue}>
+            <RatingScale value={food} size={14} />
+            <Text style={styles.ratingNumber}>{formatRating(food)}</Text>
           </View>
         </View>
         <View style={styles.ratingRow}>
@@ -225,6 +249,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  favorite: {
+    fontSize: 22,
+    color: colors.unknown,
+    paddingHorizontal: spacing.sm,
+  },
+  favoriteOn: {
+    color: '#E8A317',
   },
   close: {
     fontSize: 16,

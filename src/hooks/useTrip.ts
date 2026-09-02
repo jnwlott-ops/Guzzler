@@ -35,6 +35,8 @@ export interface UseTripOptions {
   vehicle: Vehicle | undefined;
   grade: FuelGrade;
   stations: Station[];
+  /** Dollars per rating point, from the driver's price-vs-quality preference. */
+  ratingDollars?: number;
 }
 
 /**
@@ -45,7 +47,13 @@ export interface UseTripOptions {
  * Rejections are remembered and planned around, so a "no" stays a no instead of
  * resurfacing on the next recalculation.
  */
-export function useTrip({ origin, vehicle, grade, stations }: UseTripOptions): TripState {
+export function useTrip({
+  origin,
+  vehicle,
+  grade,
+  stations,
+  ratingDollars,
+}: UseTripOptions): TripState {
   const [route, setRoute] = useState<Route | undefined>();
   const [plan, setPlan] = useState<TripPlan | undefined>();
   const [loading, setLoading] = useState(false);
@@ -63,10 +71,11 @@ export function useTrip({ origin, vehicle, grade, stations }: UseTripOptions): T
         route: forRoute,
         vehicle: driver,
         grade,
+        ratingDollars,
         excludedStationIds: rejectedStations.map((s) => s.id),
       });
     },
-    [stations, grade],
+    [stations, grade, ratingDollars],
   );
 
   const start = useCallback(

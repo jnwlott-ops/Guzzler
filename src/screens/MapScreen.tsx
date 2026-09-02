@@ -12,7 +12,9 @@ import { MapView, Polyline, PROVIDER_GOOGLE } from '../components/PlatformMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmenityFilter } from '../components/AmenityFilter';
+import { ApproachBanner } from '../components/ApproachBanner';
 import { GradeSelector } from '../components/GradeSelector';
+import { PriorityControl } from '../components/PriorityControl';
 import { RangeRings } from '../components/RangeRings';
 import { RankModeToggle } from '../components/RankModeToggle';
 import { RateStationModal } from '../components/RateStationModal';
@@ -23,11 +25,15 @@ import { TripModal } from '../components/TripModal';
 import { TripPlanSheet } from '../components/TripPlanSheet';
 import { VehicleModal } from '../components/VehicleModal';
 import { activeFeed } from '../data/priceFeed';
+import { useApproachAlerts } from '../hooks/useApproachAlerts';
+import { useFavorites } from '../hooks/useFavorites';
+import { usePreferences } from '../hooks/usePreferences';
 import { useStations } from '../hooks/useStations';
 import { useTrip } from '../hooks/useTrip';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
 import { useVehicle } from '../hooks/useVehicle';
 import { formatPrice } from '../lib/pricing';
+import { ratingDollarsFor } from '../lib/tripPlanner';
 import { estimateRange, formatLevel, formatMiles } from '../lib/range';
 import {
   findRangeDeal,
@@ -59,6 +65,9 @@ export function MapScreen() {
   /** Deals the driver has waved off — they don't come back this session. */
   const [dismissedDeals, setDismissedDeals] = useState<string[]>([]);
 
+  const { preferences, presetId, setPreset } = usePreferences();
+  const { favorites, isFavorite, toggle: toggleFavorite } = useFavorites();
+
   const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
   const range = useMemo(() => estimateRange(vehicle), [vehicle]);
 
@@ -81,8 +90,9 @@ export function MapScreen() {
   );
 
   const { ranked, median, best } = useMemo(
-    () => rankStations(visible, grade, mode, { origin: location, range }),
-    [visible, grade, mode, location, range],
+    () =>
+      rankStations(visible, grade, mode, { origin: location, range }, preferences.priceWeight),
+    [visible, grade, mode, location, range, preferences.priceWeight],
   );
 
   // Only meaningful once we know both where the driver is and what they drive.
@@ -91,7 +101,17 @@ export function MapScreen() {
     [ranked, vehicle, location],
   );
 
-  const trip = useTrip({ origin: location, vehicle, grade, stations });
+  const approach = useApproachAlerts(location, favorites);
+
+  // The same price-vs-quality dial governs the trip planner, so a driver who
+  // asks for better stops gets them on the road too, not just on the map.
+  const trip = useTrip({
+    origin: location,
+    vehicle,
+    grade,
+    stations,
+    ratingDollars: ratingDollarsFor(preferences.priceWeight),
+  });
 
   const selected = ranked.find((r) => r.station.id === selectedId);
 
@@ -101,9 +121,11 @@ export function MapScreen() {
     );
   };
 
-  const openDirections = (station: Station) => {
-    const { latitude, longitude } = station.coordinate;
-    const label = encodeURIComponent(`${station.name}, ${station.address}`);
+  // Takes the minimum a destination needs, so saved favorites — which carry no
+  // prices — can be navigated to without being inflated into full stations.
+  const openDirections = (place: Pick<Station, 'name' | 'address' | 'coordinate'>) => {
+    const { latitude, longitude } = place.coordinate;
+    const label = encodeURIComponent(`${place.name}, ${place.address}`);
 
     // Hand off to the platform's own maps app rather than routing in-app: turn
     // by turn is a solved problem and not where Guzzler adds value.
@@ -158,6 +180,11 @@ export function MapScreen() {
           <View style={styles.modeRow}>
             <RankModeToggle value={mode} onChange={setMode} />
           </View>
+          {mode === 'value' && (
+            <View style={styles.modeRow}>
+              <PriorityControl value={presetId} onChange={setPreset} />
+            </View>
+          )}
           <View style={styles.summaryRow}>
             <Text style={styles.summary} numberOfLines={1}>
               {median !== undefined
@@ -211,6 +238,22 @@ export function MapScreen() {
             <Text style={styles.tripText}>{trip.route ? '✕ Trip' : '🧭 Plan trip'}</Text>
           </Pressable>
         </View>
+
+        {/* Saved places coming up. Nearest first, so the most urgent is on top. */}
+        {approach.alerts.map((alert) => (
+          <ApproachBanner
+            key={alert.place.id}
+            alert={alert}
+            onNavigate={(favorite) =>
+              openDirections({
+                name: favorite.name,
+                address: favorite.address,
+                coordinate: favorite.coordinate,
+              })
+            }
+            onDismiss={approach.dismiss}
+          />
+        ))}
 
         {deal && !dismissedDeals.includes(deal.target.station.id) && (
           <View style={styles.dealBanner}>
@@ -285,6 +328,8 @@ export function MapScreen() {
             onNavigate={openDirections}
             onReport={reportPrice ? setReporting : undefined}
             onRate={rateStation ? setRating : undefined}
+            isFavorite={isFavorite(selected.station.id)}
+            onToggleFavorite={toggleFavorite}
           />
         </View>
       )}

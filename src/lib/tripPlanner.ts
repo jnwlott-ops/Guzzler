@@ -129,13 +129,33 @@ export function isPlanLive(plan: TripPlan, approvedStationIds: readonly string[]
 
 /** Rating for a stop, damped by how many people have actually rated it. */
 function effectiveRating(station: Station): number | undefined {
-  const { overall, restroom, reviewCount } = station.ratings;
-  const base = overall ?? restroom;
-  if (base === undefined || reviewCount === 0) return undefined;
+  const { overall, restroom, food, reviewCount } = station.ratings;
+
+  // Averaged across every axis the stop has been rated on, so a place with a
+  // good restroom and good food outranks one with only a good restroom.
+  const scores = [overall, restroom, food].filter((s): s is number => s !== undefined);
+  if (scores.length === 0 || reviewCount === 0) return undefined;
+
+  const base = scores.reduce((sum, s) => sum + s, 0) / scores.length;
 
   const confidence = Math.min(reviewCount, CONFIDENCE_REVIEWS) / CONFIDENCE_REVIEWS;
   // Pull toward neutral when we barely have any opinions.
   return 3 + (base - 3) * confidence;
+}
+
+/**
+ * Translates the driver's price-vs-quality preference into dollars per rating
+ * point, so the trip planner obeys the same dial as the map.
+ *
+ * At the default weight of 0.65 this returns the planner's original $1.50. Set
+ * to "Best stops" and a five-star stop is worth roughly twice as much detour
+ * and price premium; set to "Cheapest" and ratings barely move the plan.
+ */
+export function ratingDollarsFor(priceWeight: number): number {
+  const weight = Math.min(1, Math.max(0, priceWeight));
+  // (1 - weight) is the share the driver gives to quality; 0.35 is the default
+  // share, so this scales the baseline rather than replacing it.
+  return RATING_DOLLARS * ((1 - weight) / 0.35);
 }
 
 export interface PlanTripOptions {
