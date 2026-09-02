@@ -1,0 +1,60 @@
+name: Web preview
+
+# Publishes an interface preview to GitHub Pages so the app can be looked at
+# from a link. The map is native-only and renders a placeholder here — this is
+# for reviewing layout, copy and flows, not a substitute for a device.
+
+on:
+  push:
+    branches: ['claude/gas-price-mobile-app-69n7mc', 'main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it midway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Export web build
+        # GitHub Pages serves a project site from /<repo>/, so assets need that
+        # prefix. Falls back to the repo name automatically.
+        env:
+          EXPO_WEB_BASE_URL: /${{ github.event.repository.name }}
+        run: npx expo export --platform web --output-dir dist
+
+      - name: Disable Jekyll
+        # Expo emits assets under _expo/, and Jekyll skips directories that
+        # start with an underscore. Without this the page loads and 404s on its
+        # own JavaScript.
+        run: touch dist/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

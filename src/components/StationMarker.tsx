@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Marker } from 'react-native-maps';
+import { Marker } from './PlatformMap';
 
 import { formatPinPrice, type PriceVerdict } from '../lib/pricing';
 import { radius, verdictColor } from '../theme';

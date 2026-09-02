@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { MapView, Polyline, PROVIDER_GOOGLE } from '../components/PlatformMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmenityFilter } from '../components/AmenityFilter';

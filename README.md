@@ -58,6 +58,11 @@ npm start
 
 Then open in Expo Go, or `npm run ios` / `npm run android`.
 
+**Just want to look at it?** See [docs/VIEWING.md](docs/VIEWING.md). Every push
+publishes a web interface preview to GitHub Pages — useful for layout and copy,
+though the map is native-only and shows a placeholder there. Expo Go is the only
+way to see the real thing.
+
 Maps need Google Maps API keys before they'll render on a real build — replace
 the `REPLACE_WITH_*` placeholders in `app.json`. The Expo Go client has its own
 keys, so the map works there without setup.

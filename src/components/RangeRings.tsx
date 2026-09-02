@@ -1,4 +1,4 @@
-import { Circle } from 'react-native-maps';
+import { Circle } from './PlatformMap';
 
 import { milesToMeters, type RangeEstimate } from '../lib/range';
 import { colors } from '../theme';
