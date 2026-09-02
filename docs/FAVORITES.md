@@ -27,12 +27,19 @@ of several favorites.
 Dismissing a favorite silences it for that approach only; it re-arms once the
 driver leaves and clears.
 
-## The real limitation: this is foreground only
+## The real limitation: this is foreground only, and that's close to fatal
 
 Alerts fire while the app is open and receiving location updates. **With the app
-backgrounded or closed, nothing happens.** For a feature whose whole promise is
-"we'll let you know ahead of time," that's a significant gap, and it should be
-stated plainly rather than discovered.
+backgrounded or closed, nothing happens.**
+
+Do not read that as an edge case. Drivers run turn-by-turn navigation for the
+whole trip, which means **backgrounded is Guzzler's normal state during exactly
+the window these alerts exist for.** A foreground-only approach alert is close
+to decorative: it fires when the driver is already looking at the app, and stays
+silent when they aren't.
+
+So background delivery is not a later enhancement for this feature. It is the
+feature.
 
 Closing it means background geofencing, which has real costs worth knowing
 before committing:
@@ -49,6 +56,34 @@ before committing:
 
 A reasonable middle path is geofencing only the handful of favorites nearest the
 driver's current position, refreshed as they travel.
+
+**Both background geofencing and background tasks require a development build —
+they do not work in Expo Go.** That's a workflow change (EAS Build or `expo
+prebuild`), not just a dependency.
+
+## The surface question this raises
+
+If the driver has navigation up for the entire trip, Guzzler is never the app on
+screen while moving. That's a constraint to design around, not a failure, and it
+implies three distinct surfaces:
+
+| When | Surface | State today |
+| --- | --- | --- |
+| Before the drive | Phone, app open — the trip planner | Built |
+| During, on the phone | Background notification | Missing |
+| During, on the car screen | CarPlay / Android Auto | Missing |
+
+**CarPlay has a Fueling app category** (added in iOS 16) that is close to
+purpose-built for this. Notably, Apple requires Fueling apps to have "meaningful
+functionality" rather than just listing nearby stations — price-against-median,
+range, and stop planning is exactly that; a station list would not qualify.
+
+React Native paths exist but are third-party and need native code:
+[`@g4rb4g3/react-native-carplay`](https://www.npmjs.com/package/@g4rb4g3/react-native-carplay)
+(Expo-compatible, New Architecture) and
+[`@iternio/react-native-auto-play`](https://github.com/Iternio-Planning-AB/react-native-auto-play)
+for both platforms. Expo has no first-party support —
+[see the discussion](https://github.com/expo/expo/discussions/24354).
 
 ## Why favorites store coordinates, not just ids
 
