@@ -1,8 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { activeRouteProvider } from '../data/routeProvider';
 import { stationsAlongRoute } from '../lib/route';
-import { planTrip, type TripPlan } from '../lib/tripPlanner';
+import {
+  isPlanLive,
+  planTrip,
+  stopsAwaitingApproval,
+  type PlannedStop,
+  type TripPlan,
+} from '../lib/tripPlanner';
 import type { FuelGrade, LatLng, Route, Station, Vehicle } from '../types';
 
 export interface TripState {
@@ -10,8 +16,17 @@ export interface TripState {
   plan: TripPlan | undefined;
   loading: boolean;
   error: string | undefined;
-  /** Fetches a route and plans stops along it. */
+  /** Off-route stops still waiting on a yes or no. */
+  pending: PlannedStop[];
+  /** True once every off-route stop has been accepted. */
+  live: boolean;
+  /** Stations the driver turned down, in case they want them back. */
+  rejected: Station[];
   start: (destination: string) => Promise<void>;
+  approve: (stationId: string) => void;
+  reject: (station: Station) => void;
+  /** Puts every rejected station back in the running. */
+  restoreRejected: () => void;
   clear: () => void;
 }
 
@@ -19,23 +34,40 @@ export interface UseTripOptions {
   origin: LatLng | undefined;
   vehicle: Vehicle | undefined;
   grade: FuelGrade;
-  /** Stations to plan around — whatever the feed has loaded. */
   stations: Station[];
 }
 
 /**
- * Plans a trip and its fuel stops.
+ * Plans a trip and tracks which of its off-route stops the driver has accepted.
  *
- * The plan is computed and handed back for the driver to accept; nothing here
- * changes their navigation on its own. Automating the *suggestion* is useful;
- * automating the *decision* would mean a wrong call strands someone, and the
- * driver always knows things we don't.
+ * Nothing here changes the driver's navigation on its own, and a stop that
+ * pulls them off their route is not part of the suggestion until they say so.
+ * Rejections are remembered and planned around, so a "no" stays a no instead of
+ * resurfacing on the next recalculation.
  */
 export function useTrip({ origin, vehicle, grade, stations }: UseTripOptions): TripState {
   const [route, setRoute] = useState<Route | undefined>();
   const [plan, setPlan] = useState<TripPlan | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  const [approved, setApproved] = useState<string[]>([]);
+  const [rejected, setRejected] = useState<Station[]>([]);
+
+  /** Re-runs the planner for a route against the current rejection list. */
+  const replan = useCallback(
+    (forRoute: Route, rejectedStations: Station[], driver: Vehicle) => {
+      const corridor = stationsAlongRoute(stations, forRoute);
+      return planTrip({
+        corridor,
+        route: forRoute,
+        vehicle: driver,
+        grade,
+        excludedStationIds: rejectedStations.map((s) => s.id),
+      });
+    },
+    [stations, grade],
+  );
 
   const start = useCallback(
     async (destination: string) => {
@@ -52,14 +84,13 @@ export function useTrip({ origin, vehicle, grade, stations }: UseTripOptions): T
       setError(undefined);
       try {
         const fetched = await activeRouteProvider.getRoute(origin, destination);
-        setRoute(fetched);
 
-        // The corridor is drawn from stations already loaded for the visible
-        // region, so a long trip will only see stops near where the driver is
-        // looking. A real provider should fetch along the whole polyline —
-        // noted in docs/ROUTING.md.
-        const corridor = stationsAlongRoute(stations, fetched);
-        setPlan(planTrip({ corridor, route: fetched, vehicle, grade }));
+        // A new trip starts with a clean slate: approvals and rejections were
+        // about the old route's stops.
+        setRoute(fetched);
+        setApproved([]);
+        setRejected([]);
+        setPlan(replan(fetched, [], vehicle));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not plan that trip.');
         setRoute(undefined);
@@ -68,14 +99,60 @@ export function useTrip({ origin, vehicle, grade, stations }: UseTripOptions): T
         setLoading(false);
       }
     },
-    [origin, vehicle, grade, stations],
+    [origin, vehicle, grade, replan],
   );
+
+  const approve = useCallback((stationId: string) => {
+    setApproved((current) => (current.includes(stationId) ? current : [...current, stationId]));
+  }, []);
+
+  const reject = useCallback(
+    (station: Station) => {
+      if (!route || !vehicle) return;
+
+      const nextRejected = rejected.some((s) => s.id === station.id)
+        ? rejected
+        : [...rejected, station];
+
+      setRejected(nextRejected);
+      // Dropping a stop can shuffle the whole chain, so re-plan rather than
+      // splicing it out — the stops after it may no longer be reachable.
+      setPlan(replan(route, nextRejected, vehicle));
+    },
+    [route, vehicle, rejected, replan],
+  );
+
+  const restoreRejected = useCallback(() => {
+    if (!route || !vehicle) return;
+    setRejected([]);
+    setPlan(replan(route, [], vehicle));
+  }, [route, vehicle, replan]);
 
   const clear = useCallback(() => {
     setRoute(undefined);
     setPlan(undefined);
     setError(undefined);
+    setApproved([]);
+    setRejected([]);
   }, []);
 
-  return { route, plan, loading, error, start, clear };
+  const pending = useMemo(
+    () => (plan ? stopsAwaitingApproval(plan, approved) : []),
+    [plan, approved],
+  );
+
+  return {
+    route,
+    plan,
+    loading,
+    error,
+    pending,
+    live: plan !== undefined && isPlanLive(plan, approved),
+    rejected,
+    start,
+    approve,
+    reject,
+    restoreRejected,
+    clear,
+  };
 }

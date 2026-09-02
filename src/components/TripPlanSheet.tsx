@@ -2,15 +2,23 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { formatPrice } from '../lib/pricing';
 import { formatMiles } from '../lib/range';
-import type { TripPlan } from '../lib/tripPlanner';
+import type { PlannedStop, TripPlan } from '../lib/tripPlanner';
 import { colors, radius, spacing } from '../theme';
 import type { Route, Station } from '../types';
 
 interface TripPlanSheetProps {
   route: Route;
   plan: TripPlan;
+  /** Off-route stops still awaiting a yes or no. */
+  pending: PlannedStop[];
+  /** True once every off-route stop has been accepted. */
+  live: boolean;
+  rejectedCount: number;
   onClose: () => void;
   onSelectStop: (station: Station) => void;
+  onApprove: (stationId: string) => void;
+  onReject: (station: Station) => void;
+  onRestoreRejected: () => void;
   onAccept: () => void;
 }
 
@@ -24,10 +32,18 @@ interface TripPlanSheetProps {
 export function TripPlanSheet({
   route,
   plan,
+  pending,
+  live,
+  rejectedCount,
   onClose,
   onSelectStop,
+  onApprove,
+  onReject,
+  onRestoreRejected,
   onAccept,
 }: TripPlanSheetProps) {
+  const isPending = (stationId: string) => pending.some((s) => s.station.id === stationId);
+
   return (
     <View style={styles.sheet}>
       <View style={styles.header}>
@@ -83,40 +99,97 @@ export function TripPlanSheet({
             </View>
           </View>
 
+          {pending.length > 0 && (
+            <Text style={styles.pendingNotice}>
+              {pending.length === 1 ? 'One stop takes' : `${pending.length} stops take`} you off
+              your route. Approve or skip {pending.length === 1 ? 'it' : 'them'} to continue.
+            </Text>
+          )}
+
           <ScrollView style={styles.stops} contentContainerStyle={styles.stopsContent}>
-            {plan.stops.map((stop, index) => (
-              <Pressable
-                key={stop.station.id}
-                style={styles.stop}
-                onPress={() => onSelectStop(stop.station)}
-                accessibilityRole="button"
-              >
-                <View style={styles.stopIndex}>
-                  <Text style={styles.stopIndexText}>{index + 1}</Text>
+            {plan.stops.map((stop, index) => {
+              const awaiting = isPending(stop.station.id);
+
+              return (
+                <View
+                  key={stop.station.id}
+                  style={[styles.stop, awaiting && styles.stopPending]}
+                >
+                  <Pressable
+                    style={styles.stopRow}
+                    onPress={() => onSelectStop(stop.station)}
+                    accessibilityRole="button"
+                  >
+                    <View style={[styles.stopIndex, awaiting && styles.stopIndexPending]}>
+                      <Text style={styles.stopIndexText}>{awaiting ? '?' : index + 1}</Text>
+                    </View>
+                    <View style={styles.stopBody}>
+                      <Text style={styles.stopName}>{stop.station.name}</Text>
+                      <Text style={styles.stopMeta}>
+                        {formatMiles(stop.alongMiles)} in ·{' '}
+                        {formatPrice(stop.pricePerGallon)}/gal · {stop.units.toFixed(1)} gal
+                      </Text>
+                      <Text style={styles.stopArrival}>
+                        Arrive with ~{formatMiles(stop.arriveWithMiles)} of range
+                        {stop.detourMiles > 0.2 && ` · ${formatMiles(stop.detourMiles)} detour`}
+                      </Text>
+                    </View>
+                    <Text style={styles.stopCost}>${stop.fuelCost.toFixed(2)}</Text>
+                  </Pressable>
+
+                  {awaiting && (
+                    <View style={styles.approval}>
+                      <Text style={styles.approvalPrompt}>
+                        {formatMiles(stop.detourMiles)} off your route. Worth it?
+                      </Text>
+                      <View style={styles.approvalButtons}>
+                        <Pressable
+                          style={[styles.approvalButton, styles.rejectButton]}
+                          onPress={() => onReject(stop.station)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Skip ${stop.station.name}`}
+                        >
+                          <Text style={styles.rejectText}>Skip</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.approvalButton, styles.approveButton]}
+                          onPress={() => onApprove(stop.station.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Approve the detour to ${stop.station.name}`}
+                        >
+                          <Text style={styles.approveText}>Approve</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
                 </View>
-                <View style={styles.stopBody}>
-                  <Text style={styles.stopName}>{stop.station.name}</Text>
-                  <Text style={styles.stopMeta}>
-                    {formatMiles(stop.alongMiles)} in ·{' '}
-                    {formatPrice(stop.pricePerGallon)}/gal · {stop.units.toFixed(1)} gal
-                  </Text>
-                  <Text style={styles.stopArrival}>
-                    Arrive with ~{formatMiles(stop.arriveWithMiles)} of range
-                    {stop.detourMiles > 0.2 && ` · ${formatMiles(stop.detourMiles)} detour`}
-                  </Text>
-                </View>
-                <Text style={styles.stopCost}>${stop.fuelCost.toFixed(2)}</Text>
-              </Pressable>
-            ))}
+              );
+            })}
           </ScrollView>
 
+          {rejectedCount > 0 && (
+            <Pressable onPress={onRestoreRejected} style={styles.restore}>
+              <Text style={styles.restoreText}>
+                {rejectedCount} skipped · tap to reconsider
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
-            style={styles.accept}
+            style={[styles.accept, !live && styles.acceptDisabled]}
             onPress={onAccept}
+            disabled={!live}
             accessibilityRole="button"
-            accessibilityLabel="Start navigation to the first stop"
+            accessibilityState={{ disabled: !live }}
+            accessibilityLabel={
+              live
+                ? `Start navigation to ${plan.stops[0].station.name}`
+                : 'Approve or skip the off-route stops first'
+            }
           >
-            <Text style={styles.acceptText}>Start with {plan.stops[0].station.name}</Text>
+            <Text style={styles.acceptText}>
+              {live ? `Start with ${plan.stops[0].station.name}` : 'Decide on the detours first'}
+            </Text>
           </Pressable>
           <Text style={styles.disclaimer}>
             Estimates. Check your gauge — range varies with speed, load and weather.
@@ -234,14 +307,77 @@ const styles = StyleSheet.create({
   stopsContent: {
     gap: spacing.sm,
   },
+  pendingNotice: {
+    fontSize: 12,
+    color: colors.typical,
+    fontWeight: '700',
+    marginTop: spacing.md,
+    lineHeight: 17,
+  },
   stop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  stopPending: {
+    borderColor: colors.typical,
+    borderWidth: 1.5,
+  },
+  stopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  approval: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  approvalPrompt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  approvalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  approvalButton: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
+  rejectButton: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rejectText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  approveButton: {
+    backgroundColor: colors.deal,
+  },
+  approveText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  restore: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  restoreText: {
+    fontSize: 12,
+    color: colors.accent,
+    fontWeight: '600',
   },
   stopIndex: {
     width: 24,
@@ -251,6 +387,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+  },
+  stopIndexPending: {
+    backgroundColor: colors.typical,
   },
   stopIndexText: {
     color: '#FFFFFF',
@@ -288,6 +427,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.accent,
     alignItems: 'center',
+  },
+  acceptDisabled: {
+    backgroundColor: colors.unknown,
   },
   acceptText: {
     color: '#FFFFFF',

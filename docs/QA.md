@@ -68,6 +68,14 @@ The things most likely to be broken, roughly in order:
 - [ ] Plan somewhere unreachable → explains why, doesn't fake a plan
 - [ ] Tap a stop → station sheet opens for it
 
+**Approval gate** (nothing off-route should ever happen silently)
+- [ ] A stop >3 detour miles shows Approve / Skip and blocks the Start button
+- [ ] Approving it unblocks Start
+- [ ] Skipping it re-plans around it — and it does *not* come back
+- [ ] Skipping everything → "turned down" message, with reconsider offered
+- [ ] On-route stops (at the exit) do *not* ask for approval
+- [ ] Deal banner "No thanks" dismisses it and it stays dismissed
+
 **Submissions**
 - [ ] Report a price → map updates, pin recolors
 - [ ] Rate a stop in pumps → review count increments

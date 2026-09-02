@@ -33,6 +33,11 @@ you are — the thing a traveler passing through can't know on their own.
   once detours and driver ratings are priced in, never dipping below reserve.
   The plan is *proposed*, never applied: it shows every stop's price, gallons
   and arrival range, and the driver accepts. See [docs/ROUTING.md](docs/ROUTING.md).
+- **Detours need a yes.** A stop within 3 round-trip miles is on the way and
+  goes in quietly. Anything further is marked, shown with its detour distance,
+  and needs an explicit Approve or Skip before the plan goes live — a rejection
+  is remembered and planned around. Suggestions the driver can't refuse aren't
+  suggestions.
 - **Per-tank savings.** "Save about $4.20 on a 14-gallon fill-up" beats a bare
   price delta.
 - **Freshness as a trust signal.** Every quote carries a timestamp and a source,

@@ -15,6 +15,38 @@ knows things the app doesn't (a closed station, a construction detour, a kid who
 needs a bathroom now). An automated planner that says "trust me" earns exactly
 one wrong recommendation before nobody uses it again.
 
+## Off the beaten path needs a yes
+
+There are two kinds of stop, split at `ON_THE_WAY_DETOUR_MILES` (3 miles round
+trip, roughly four minutes):
+
+- **On the way** — the station at the exit, a block off the highway. Goes into
+  the plan without ceremony. It's a detail.
+- **Off the beaten path** — anything beyond that. Marked
+  `requiresApproval`, shown with the detour distance and an explicit
+  Approve / Skip, and **the plan is not a live suggestion until every one is
+  resolved**. `isPlanLive()` gates the Start button on exactly this.
+
+Taking someone meaningfully off their route is a decision, not a detail, and
+it isn't the app's to make quietly. A driver who discovers mid-trip that
+"best value" meant eight miles through a town they didn't want to visit stops
+trusting the planner — reasonably.
+
+### A no stays a no
+
+Rejected stations go into `excludedStationIds` and the trip is **re-planned
+around them**, not spliced. Dropping a stop can make everything after it
+unreachable, so the whole chain has to be recomputed — and a rejection must
+never resurface on the next recalculation.
+
+If rejections leave nothing workable, the plan comes back infeasible with
+`'Every usable stop on this route has been turned down.'`, distinct from the
+no-sellers-of-this-grade case, and the sheet offers to reconsider them.
+
+The same principle governs the "don't fill up yet" banner on the map: it carries
+an explicit **No thanks**, and a dismissed deal stays dismissed for the session.
+A standing suggestion the driver can't refuse is a nudge, not a suggestion.
+
 ## It's not "find the highest-rated stop"
 
 That framing produces bad plans. The real problem is a constrained

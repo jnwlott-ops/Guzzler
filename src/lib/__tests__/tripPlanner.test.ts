@@ -1,5 +1,12 @@
 import { stationsAlongRoute } from '../route';
-import { planTrip, type FeasibleTripPlan, type InfeasibleTripPlan } from '../tripPlanner';
+import {
+  isPlanLive,
+  ON_THE_WAY_DETOUR_MILES,
+  planTrip,
+  stopsAwaitingApproval,
+  type FeasibleTripPlan,
+  type InfeasibleTripPlan,
+} from '../tripPlanner';
 import type { LatLng, Route, Station, Vehicle } from '../../types';
 
 const MPD = 69.047;
@@ -244,6 +251,83 @@ describe('infeasible trips', () => {
   it('reports when even the first stop is out of reach', () => {
     const result = plan([stationAt('miles-away', 900, 0, 3.0)], route, car({ level: 0.2 }));
     expect(result.feasible).toBe(false);
+  });
+});
+
+describe('off-route stops need approval', () => {
+  const route = northRoute(8);
+
+  it('does not flag a stop that is effectively on the way', () => {
+    // A station at the exit is a detail, not a decision.
+    const result = plan([stationAt('at-the-exit', 200, 0.5, 3.0)], route) as FeasibleTripPlan;
+
+    expect(result.stops[0].detourMiles).toBeLessThan(ON_THE_WAY_DETOUR_MILES);
+    expect(result.stops[0].requiresApproval).toBe(false);
+    expect(stopsAwaitingApproval(result, [])).toHaveLength(0);
+    expect(isPlanLive(result, [])).toBe(true);
+  });
+
+  it('flags a stop that pulls the driver off their route', () => {
+    // Priced low enough that the planner picks it despite the detour.
+    const result = plan([stationAt('off-route', 200, 4, 2.0)], route) as FeasibleTripPlan;
+
+    expect(result.stops[0].detourMiles).toBeGreaterThan(ON_THE_WAY_DETOUR_MILES);
+    expect(result.stops[0].requiresApproval).toBe(true);
+    expect(stopsAwaitingApproval(result, [])).toHaveLength(1);
+  });
+
+  it('is not live until the off-route stop is approved', () => {
+    const result = plan([stationAt('off-route', 200, 4, 2.0)], route) as FeasibleTripPlan;
+
+    expect(isPlanLive(result, [])).toBe(false);
+    expect(isPlanLive(result, ['off-route'])).toBe(true);
+    expect(stopsAwaitingApproval(result, ['off-route'])).toHaveLength(0);
+  });
+
+  it('reports nothing pending for an infeasible plan', () => {
+    const impossible = plan([], northRoute(16));
+    expect(stopsAwaitingApproval(impossible, [])).toEqual([]);
+    expect(isPlanLive(impossible, [])).toBe(false);
+  });
+});
+
+describe('rejected stops', () => {
+  const route = northRoute(8);
+  const stations = [stationAt('off-route', 200, 4, 2.0), stationAt('on-route', 210, 0, 3.6)];
+
+  it('plans around a rejection instead of resurfacing it', () => {
+    const withDetour = plan(stations, route) as FeasibleTripPlan;
+    expect(withDetour.stops.map((s) => s.station.id)).toEqual(['off-route']);
+
+    const without = planTrip({
+      corridor: stationsAlongRoute(stations, route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      excludedStationIds: ['off-route'],
+    }) as FeasibleTripPlan;
+
+    expect(without.stops.map((s) => s.station.id)).toEqual(['on-route']);
+    expect(isPlanLive(without, [])).toBe(true);
+  });
+
+  it('explains itself when every option has been turned down', () => {
+    const result = planTrip({
+      corridor: stationsAlongRoute(stations, route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      excludedStationIds: ['off-route', 'on-route'],
+    }) as InfeasibleTripPlan;
+
+    expect(result.feasible).toBe(false);
+    expect(result.reason).toContain('turned down');
+  });
+
+  it('keeps the grade explanation distinct from the rejection one', () => {
+    const noSellers = plan([stationAt('nodiesel', 100, 0, 3.0)], northRoute(16), car(), 'diesel') as InfeasibleTripPlan;
+    expect(noSellers.reason).toContain('grade');
+    expect(noSellers.reason).not.toContain('turned down');
   });
 });
 

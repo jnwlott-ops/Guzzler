@@ -56,6 +56,8 @@ export function MapScreen() {
   const [editingVehicle, setEditingVehicle] = useState(false);
 
   const [planningTrip, setPlanningTrip] = useState(false);
+  /** Deals the driver has waved off — they don't come back this session. */
+  const [dismissedDeals, setDismissedDeals] = useState<string[]>([]);
 
   const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
   const range = useMemo(() => estimateRange(vehicle), [vehicle]);
@@ -210,12 +212,8 @@ export function MapScreen() {
           </Pressable>
         </View>
 
-        {deal && (
-          <Pressable
-            style={styles.dealBanner}
-            onPress={() => setSelectedId(deal.target.station.id)}
-            accessibilityRole="button"
-          >
+        {deal && !dismissedDeals.includes(deal.target.station.id) && (
+          <View style={styles.dealBanner}>
             <Text style={styles.dealTitle}>
               Don't fill up yet — save ${deal.savings.toFixed(2)}
             </Text>
@@ -224,7 +222,28 @@ export function MapScreen() {
               {formatMiles(Math.max(0, deal.extraMiles))} further than the nearest stop, and well
               inside your range.
             </Text>
-          </Pressable>
+            {/* A suggestion the driver can't refuse is a nudge, not a suggestion. */}
+            <View style={styles.dealActions}>
+              <Pressable
+                style={[styles.dealButton, styles.dealDismiss]}
+                onPress={() =>
+                  setDismissedDeals((current) => [...current, deal.target.station.id])
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss this suggestion"
+              >
+                <Text style={styles.dealDismissText}>No thanks</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.dealButton, styles.dealAccept]}
+                onPress={() => setSelectedId(deal.target.station.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Show ${deal.target.station.name}`}
+              >
+                <Text style={styles.dealAcceptText}>Show me</Text>
+              </Pressable>
+            </View>
+          </View>
         )}
       </View>
 
@@ -238,10 +257,16 @@ export function MapScreen() {
           <TripPlanSheet
             route={trip.route}
             plan={trip.plan}
+            pending={trip.pending}
+            live={trip.live}
+            rejectedCount={trip.rejected.length}
             onClose={trip.clear}
             onSelectStop={(station) => setSelectedId(station.id)}
+            onApprove={trip.approve}
+            onReject={trip.reject}
+            onRestoreRejected={trip.restoreRejected}
             onAccept={() => {
-              if (trip.plan?.feasible && trip.plan.stops.length > 0) {
+              if (trip.live && trip.plan?.feasible && trip.plan.stops.length > 0) {
                 openDirections(trip.plan.stops[0].station);
               }
             }}
@@ -425,6 +450,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     lineHeight: 17,
+  },
+  dealActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  dealButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
+  dealDismiss: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  dealDismissText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dealAccept: {
+    backgroundColor: '#FFFFFF',
+  },
+  dealAcceptText: {
+    color: colors.deal,
+    fontSize: 13,
+    fontWeight: '700',
   },
   attribution: {
     position: 'absolute',

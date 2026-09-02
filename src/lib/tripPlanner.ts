@@ -44,6 +44,18 @@ const CONFIDENCE_REVIEWS = 5;
 const DETOUR_DOLLARS_PER_MILE = 0.25;
 
 /**
+ * Round-trip detour miles a stop can cost before it counts as taking the
+ * driver off the beaten path.
+ *
+ * Below this, a stop is effectively on the way — the station at the exit, a
+ * block off the highway — and goes into the plan without ceremony. Above it,
+ * the driver approves or rejects before it becomes a live suggestion. Three
+ * miles round trip is roughly four minutes; beyond that it's a decision, not a
+ * detail, and it isn't ours to make quietly.
+ */
+export const ON_THE_WAY_DETOUR_MILES = 3;
+
+/**
  * What making a stop costs at all, independent of fuel: pulling off, queuing,
  * filling, getting back on. Call it ten minutes.
  *
@@ -66,6 +78,11 @@ export interface PlannedStop {
   fuelCost: number;
   /** Miles of range left on arrival, above reserve. */
   arriveWithMiles: number;
+  /**
+   * True when this stop takes the driver meaningfully off their route, so it
+   * needs an explicit yes before it counts as a suggestion.
+   */
+  requiresApproval: boolean;
 }
 
 export interface FeasibleTripPlan {
@@ -89,6 +106,27 @@ export interface InfeasibleTripPlan {
 
 export type TripPlan = FeasibleTripPlan | InfeasibleTripPlan;
 
+/**
+ * The off-route stops still waiting on a yes or no.
+ *
+ * A plan is not a live suggestion until this is empty: anything that pulls the
+ * driver off their route is theirs to accept, not ours to assume.
+ */
+export function stopsAwaitingApproval(
+  plan: TripPlan,
+  approvedStationIds: readonly string[],
+): PlannedStop[] {
+  if (!plan.feasible) return [];
+
+  const approved = new Set(approvedStationIds);
+  return plan.stops.filter((stop) => stop.requiresApproval && !approved.has(stop.station.id));
+}
+
+/** True when every off-route stop has been explicitly accepted. */
+export function isPlanLive(plan: TripPlan, approvedStationIds: readonly string[]): boolean {
+  return plan.feasible && stopsAwaitingApproval(plan, approvedStationIds).length === 0;
+}
+
 /** Rating for a stop, damped by how many people have actually rated it. */
 function effectiveRating(station: Station): number | undefined {
   const { overall, restroom, reviewCount } = station.ratings;
@@ -107,6 +145,11 @@ export interface PlanTripOptions {
   grade: FuelGrade;
   /** How strongly ratings override price. Defaults to RATING_DOLLARS. */
   ratingDollars?: number;
+  /**
+   * Stations the driver has rejected. Excluded outright and re-planned around,
+   * so a "no" stays a no rather than resurfacing on the next recalculation.
+   */
+  excludedStationIds?: readonly string[];
 }
 
 /**
@@ -122,7 +165,9 @@ export function planTrip({
   vehicle,
   grade,
   ratingDollars = RATING_DOLLARS,
+  excludedStationIds = [],
 }: PlanTripOptions): TripPlan {
+  const excluded = new Set(excludedStationIds);
   const totalMiles = route.distanceMiles;
 
   // Range on a full tank, and on what's in the tank right now, both measured
@@ -145,15 +190,19 @@ export function planTrip({
     };
   }
 
-  // Only stations that actually sell the grade can be planned around.
-  const candidates = corridor.filter((c) => priceFor(c.station, grade) !== undefined);
+  // Only stations that sell the grade, and that the driver hasn't rejected.
+  const sellsGrade = corridor.filter((c) => priceFor(c.station, grade) !== undefined);
+  const candidates = sellsGrade.filter((c) => !excluded.has(c.station.id));
 
   if (candidates.length === 0) {
     return {
       feasible: false,
       reachableToMiles: startRange,
       shortfallMiles: totalMiles - startRange,
-      reason: 'No stations along this route sell that grade.',
+      reason:
+        sellsGrade.length === 0
+          ? 'No stations along this route sell that grade.'
+          : 'Every usable stop on this route has been turned down.',
     };
   }
 
@@ -269,6 +318,7 @@ export function planTrip({
       units,
       fuelCost: units * price,
       arriveWithMiles: Math.max(0, available - miles),
+      requiresApproval: c.detourMiles > ON_THE_WAY_DETOUR_MILES,
     };
   });
 
