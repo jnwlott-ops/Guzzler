@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Guzzler",
+    "slug": "guzzler",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "guzzler",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.guzzler.app",
+      "config": {
+        "googleMapsApiKey": "REPLACE_WITH_IOS_GOOGLE_MAPS_API_KEY"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Guzzler uses your location to show gas prices at stations near you."
+      }
+    },
+    "android": {
+      "package": "com.guzzler.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_API_KEY"
+        }
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Guzzler uses your location to show gas prices at stations near you."
+        }
+      ]
+    ]
+  }
+}
