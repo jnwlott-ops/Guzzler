@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '../theme';
 import type { RatingSubmission, Station } from '../types';
-import { StarRating } from './StarRating';
+import { RatingScale } from './RatingScale';
 
 interface RateStationModalProps {
   station: Station | undefined;
@@ -60,15 +60,16 @@ export function RateStationModal({ station, onSubmit, onClose }: RateStationModa
         <View style={styles.card}>
           <Text style={styles.title}>Rate this stop</Text>
           <Text style={styles.subtitle}>{station?.name} · {station?.address}</Text>
+          <Text style={styles.scaleHint}>1–5 pumps</Text>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Restroom</Text>
-            <StarRating value={restroom} onChange={setRestroom} size={30} label="Restroom rating" />
+            <RatingScale value={restroom} onChange={setRestroom} size={30} label="Restroom rating" />
           </View>
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Overall stop</Text>
-            <StarRating value={overall} onChange={setOverall} size={30} label="Overall rating" />
+            <RatingScale value={overall} onChange={setOverall} size={30} label="Overall rating" />
           </View>
 
           {error && <Text style={styles.error}>{error}</Text>}
@@ -112,6 +113,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  scaleHint: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginTop: spacing.sm,
   },
   field: {
     marginTop: spacing.lg,

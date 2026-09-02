@@ -10,7 +10,7 @@ import {
   type FuelGrade,
   type Station,
 } from '../types';
-import { StarRating } from './StarRating';
+import { RatingScale } from './RatingScale';
 
 interface StationSheetProps {
   ranked: RankedStation;
@@ -97,14 +97,14 @@ export function StationSheet({
         <View style={styles.ratingRow}>
           <Text style={styles.ratingLabel}>🚻 Restroom</Text>
           <View style={styles.ratingValue}>
-            <StarRating value={restroom} size={14} />
+            <RatingScale value={restroom} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(restroom)}</Text>
           </View>
         </View>
         <View style={styles.ratingRow}>
           <Text style={styles.ratingLabel}>Overall stop</Text>
           <View style={styles.ratingValue}>
-            <StarRating value={overall} size={14} />
+            <RatingScale value={overall} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(overall)}</Text>
           </View>
         </View>
