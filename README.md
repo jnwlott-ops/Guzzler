@@ -58,8 +58,14 @@ the `REPLACE_WITH_*` placeholders in `app.json`. The Expo Go client has its own
 keys, so the map works there without setup.
 
 ```bash
+npm run verify      # typecheck + tests
+npm test            # 84 tests
 npm run typecheck
 ```
+
+CI runs typecheck, tests, and an Android bundle on every push. See
+[docs/QA.md](docs/QA.md) for how to actually test this thing — including the
+parts no test suite covers.
 
 ## Layout
 
