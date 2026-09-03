@@ -24,6 +24,9 @@ import type { PriceFeed } from './priceFeed';
 /** Degrees per grid cell — roughly a one-mile square at US latitudes. */
 const CELL_SIZE = 0.015;
 
+/** Widest region the mock will generate for: 20 cells a side, so 400 at most. */
+const MAX_SPAN_DEGREES = CELL_SIZE * 20;
+
 /** Baseline regular-grade price the mock varies around, in USD/gal. */
 const BASE_REGULAR_PRICE = 3.29;
 
@@ -208,6 +211,7 @@ function stationsInCell(cellX: number, cellY: number): Station[] {
 }
 
 export class MockPriceFeed implements PriceFeed {
+  readonly maxSpanDegrees = MAX_SPAN_DEGREES;
   readonly name = 'Demo data';
 
   /** Reports submitted this session, applied on top of generated prices. */
@@ -225,15 +229,20 @@ export class MockPriceFeed implements PriceFeed {
     const minLng = region.longitude - region.longitudeDelta / 2;
     const maxLng = region.longitude + region.longitudeDelta / 2;
 
+    // Guard against someone zooming out to the whole planet and generating
+    // hundreds of thousands of stations. Expressed as a span rather than a
+    // cell count so the UI can apply the identical test and explain itself.
+    if (
+      region.latitudeDelta > MAX_SPAN_DEGREES ||
+      region.longitudeDelta > MAX_SPAN_DEGREES
+    ) {
+      return [];
+    }
+
     const minCellY = Math.floor(minLat / CELL_SIZE);
     const maxCellY = Math.floor(maxLat / CELL_SIZE);
     const minCellX = Math.floor(minLng / CELL_SIZE);
     const maxCellX = Math.floor(maxLng / CELL_SIZE);
-
-    // Guard against someone zooming out to the whole planet and generating
-    // hundreds of thousands of stations.
-    const cellCount = (maxCellY - minCellY + 1) * (maxCellX - minCellX + 1);
-    if (cellCount > 400) return [];
 
     const stations: Station[] = [];
     for (let y = minCellY; y <= maxCellY; y++) {

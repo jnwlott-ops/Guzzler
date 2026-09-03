@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import { activeFeed } from '../data/priceFeed';
 import { activeRouteProvider } from '../data/routeProvider';
 import { stationsAlongRoute } from '../lib/route';
+import { fetchStationsAlongRoute } from '../data/routeStations';
 import {
   isPlanLive,
   planTrip,
@@ -40,7 +42,6 @@ export interface UseTripOptions {
   origin: LatLng | undefined;
   vehicle: Vehicle | undefined;
   grade: FuelGrade;
-  stations: Station[];
   /** Dollars per rating point, from the driver's price-vs-quality preference. */
   ratingDollars?: number;
 }
@@ -57,7 +58,6 @@ export function useTrip({
   origin,
   vehicle,
   grade,
-  stations,
   ratingDollars,
 }: UseTripOptions): TripState {
   const [route, setRoute] = useState<Route | undefined>();
@@ -71,14 +71,23 @@ export function useTrip({
   const [chosen, setChosen] = useState<string[]>([]);
 
   /** Re-runs the planner against the current rejections and choices. */
+  /**
+   * Stations along the current route, fetched once when the trip is planned.
+   *
+   * Not the map's stations: those are whatever the visible region loaded, so
+   * zooming out far enough to see a long trip left the planner with nothing.
+   */
+  const [routeStations, setRouteStations] = useState<Station[]>([]);
+
   const replan = useCallback(
     (
       forRoute: Route,
       rejectedStations: Station[],
       driver: Vehicle,
       chosenIds: string[] = [],
+      alongRoute: Station[] = routeStations,
     ) => {
-      const corridor = stationsAlongRoute(stations, forRoute);
+      const corridor = stationsAlongRoute(alongRoute, forRoute);
       return planTrip({
         corridor,
         route: forRoute,
@@ -89,7 +98,7 @@ export function useTrip({
         pinnedStationIds: chosenIds,
       });
     },
-    [stations, grade, ratingDollars],
+    [routeStations, grade, ratingDollars],
   );
 
   const start = useCallback(
@@ -107,14 +116,18 @@ export function useTrip({
       setError(undefined);
       try {
         const fetched = await activeRouteProvider.getRoute(origin, destination);
+        // Ask the feed for stations along the whole route before planning, so
+        // the plan does not depend on where the map is pointed.
+        const along = await fetchStationsAlongRoute(activeFeed, fetched);
 
         // A new trip starts with a clean slate: approvals and rejections were
         // about the old route's stops.
         setRoute(fetched);
+        setRouteStations(along);
         setApproved([]);
         setRejected([]);
         setChosen([]);
-        setPlan(replan(fetched, [], vehicle, []));
+        setPlan(replan(fetched, [], vehicle, [], along));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not plan that trip.');
         setRoute(undefined);
@@ -195,6 +208,7 @@ export function useTrip({
     setApproved([]);
     setRejected([]);
     setChosen([]);
+    setRouteStations([]);
   }, []);
 
   const pending = useMemo(

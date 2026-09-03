@@ -131,6 +131,33 @@ Both were real and both would have shipped:
    fuel you bought. Now scaled by `fillFraction`, so a stop that gets a third
    of your business earns a third of the goodwill.
 
+## The candidate set is the whole ballgame
+
+The planner is only as good as the stations it is handed, and it used to be
+handed whatever the **map** had loaded for the visible region. That is fine
+while you are looking at your own neighbourhood and silently broken the moment
+you are not: zoom out far enough to see a 176-mile trip and the feed's own
+span limit returns nothing, so the corridor was empty.
+
+Worse, the resulting message blamed the wrong thing — *"No stations along this
+route sell that grade"* — which sends the driver off switching between Regular
+and Premium to fix a problem that has nothing to do with fuel grade. An empty
+corridor now says so directly.
+
+`fetchStationsAlongRoute` (`src/data/routeStations.ts`) asks the feed about the
+route itself, in overlapping windows along the polyline, deduped by id. Two
+details are load-bearing:
+
+- **Windows are clamped to the feed's `maxSpanDegrees`.** Asking for a window
+  wider than a feed will answer for gets nothing back — the exact failure this
+  module exists to fix. Longitude clamps separately, because a degree of
+  longitude is only ~57 miles in Georgia and hits the limit first.
+- **The sampling step never exceeds a window's reach.** Otherwise stations fall
+  into the gaps between queries, which is invisible: no error, just a thinner
+  plan than the road deserves.
+
+One dead window is caught and skipped rather than failing the route.
+
 ## Infeasible trips say so
 
 When there's a stretch longer than a full tank, `planTrip` returns
@@ -154,10 +181,11 @@ server-side, for free. Note the domain moved from `developer.nrel.gov` on
 
 ## Known gaps
 
-- **The corridor only sees loaded stations.** `useTrip` plans against whatever
-  the feed loaded for the visible map region, so a long trip won't see stops
-  near the far end. A real provider must fetch along the whole polyline. This is
-  the most important gap — the planner is only as good as its candidate set.
+- **Long routes are sampled, not swept.** `fetchStationsAlongRoute` walks the
+  polyline in overlapping windows, capped at 120 requests. Past roughly 700
+  miles the spacing widens and some stations go unseen — fewer candidates,
+  never a wrong plan. A provider implementing `getStationsAlongRoute` (NREL has
+  a stations-along-a-route endpoint) answers in one call and removes the cap.
 - **One route, no alternatives.** Real providers return several; we take the
   first. Comparing total cost across alternatives is a natural feature.
 - **Fill-to-full is assumed.** Partial fills at a cheap station can beat full

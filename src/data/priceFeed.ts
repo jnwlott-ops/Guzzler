@@ -1,4 +1,4 @@
-import type { PriceReport, RatingSubmission, Region, Station } from '../types';
+import type { PriceReport, RatingSubmission, Region, Route, Station } from '../types';
 
 /**
  * The single seam between Guzzler and whoever supplies its prices.
@@ -13,6 +13,15 @@ export interface PriceFeed {
   readonly name: string;
 
   /**
+   * Widest region this feed will answer for, in degrees.
+   *
+   * Zoomed out past this it returns nothing, and the UI needs to know that so
+   * it can say "zoom in" rather than "no prices here" — which reads as "there
+   * is no fuel in Georgia" and is a very different claim.
+   */
+  readonly maxSpanDegrees?: number;
+
+  /**
    * Fetch stations whose coordinates fall inside `region`.
    *
    * Implementations should treat this as cheap and idempotent — it is called
@@ -20,6 +29,20 @@ export interface PriceFeed {
    * and a short-lived cache behind this method.
    */
   getStationsInRegion(region: Region, signal?: AbortSignal): Promise<Station[]>;
+
+  /**
+   * Stations along a whole route, when the provider can answer that directly.
+   *
+   * Optional. Without it, `fetchStationsAlongRoute` walks the polyline in
+   * overlapping windows, which any region feed can serve. Worth implementing:
+   * NREL's alternative-fuel API has a stations-along-a-route endpoint that
+   * does this server-side in one request.
+   */
+  getStationsAlongRoute?(
+    route: Route,
+    corridorMiles: number,
+    signal?: AbortSignal,
+  ): Promise<Station[]>;
 
   /**
    * Submit a user-observed price. Optional: read-only providers omit it, and

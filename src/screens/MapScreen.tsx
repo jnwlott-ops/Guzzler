@@ -115,6 +115,15 @@ export function MapScreen() {
 
   const approach = useApproachAlerts(location, favorites);
 
+  // Past the feed's limit there are no stations to have an opinion about, and
+  // "no prices in view" would read as a claim about the world rather than
+  // about the zoom level.
+  const maxSpan = activeFeed.maxSpanDegrees;
+  const tooZoomedOut =
+    maxSpan !== undefined &&
+    region !== undefined &&
+    (region.latitudeDelta > maxSpan || region.longitudeDelta > maxSpan);
+
   /** Index of the planned stop the driver is reconsidering, if any. */
   const [swappingStop, setSwappingStop] = useState<number | undefined>();
 
@@ -125,7 +134,6 @@ export function MapScreen() {
     origin: location,
     vehicle,
     grade,
-    stations,
     ratingDollars: ratingDollarsFor(preferences.priceWeight),
   });
 
@@ -237,9 +245,11 @@ export function MapScreen() {
                 ? mode === 'value' && best
                   ? `Best value: ${best.station.name} · ${formatPrice(best.price)}`
                   : `Local median ${formatPrice(median)} · ${ranked.length} stations`
-                : filters.length > 0
-                  ? 'No stops match those filters'
-                  : 'No prices in view'}
+                : tooZoomedOut
+                  ? 'Zoom in to see prices'
+                  : filters.length > 0
+                    ? 'No stops match those filters'
+                    : 'No prices in view'}
             </Text>
             {loading && <ActivityIndicator size="small" color={colors.textMuted} />}
           </View>

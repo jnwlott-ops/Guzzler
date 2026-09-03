@@ -228,9 +228,14 @@ export function planTrip({
       reachableToMiles: startRange,
       shortfallMiles: totalMiles - startRange,
       reason:
-        sellsGrade.length === 0
-          ? 'No stations along this route sell that grade.'
-          : 'Every usable stop on this route has been turned down.',
+        corridor.length === 0
+          ? // No data is not the same as no options, and telling someone to
+            // change fuel grade when we simply have no stations for this road
+            // sends them off fixing the wrong thing.
+            "We don't have station data along this route yet."
+          : sellsGrade.length === 0
+            ? 'No stations along this route sell that grade.'
+            : 'Every usable stop on this route has been turned down.',
     };
   }
 
