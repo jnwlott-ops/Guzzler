@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.text,
+    backgroundColor: colors.strong,
     shadowColor: '#000',
     shadowOpacity: 0.18,
     shadowRadius: 6,
@@ -72,12 +72,12 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.onStrong,
     fontSize: 14,
     fontWeight: '800',
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(20,24,30,0.62)',
     fontSize: 12,
     marginTop: 1,
   },
@@ -91,18 +91,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   dismiss: {
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(20,24,30,0.10)',
   },
   dismissText: {
-    color: '#FFFFFF',
+    color: colors.onStrong,
     fontSize: 13,
     fontWeight: '600',
   },
   go: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.accent,
   },
   goText: {
-    color: colors.text,
+    color: colors.onAccent,
     fontSize: 13,
     fontWeight: '800',
   },

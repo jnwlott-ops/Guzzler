@@ -43,6 +43,7 @@ import {
   verdictForMode,
   type RankMode,
 } from '../lib/value';
+import { darkMapStyle } from '../mapStyle';
 import { colors, radius, spacing } from '../theme';
 import type { Amenity, FuelGrade, Region, Station } from '../types';
 
@@ -149,6 +150,9 @@ export function MapScreen() {
         // Google Maps on both platforms so the pins and basemap match what
         // travelers already recognize from navigation.
         provider={PROVIDER_GOOGLE}
+        // Dark basemap with Google's POIs suppressed, so the only markers on
+        // the map are the stations we priced. See src/mapStyle.ts.
+        customMapStyle={darkMapStyle}
         initialRegion={initialRegion}
         onRegionChangeComplete={setRegion}
         showsUserLocation={status === 'granted'}
@@ -436,7 +440,7 @@ const styles = StyleSheet.create({
   },
   tripChip: {
     justifyContent: 'center',
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -449,7 +453,7 @@ const styles = StyleSheet.create({
   tripText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.onAccent,
   },
   rangeChip: {
     flexDirection: 'row',

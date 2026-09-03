@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   buttonPrimaryText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '700',
     fontSize: 15,
   },

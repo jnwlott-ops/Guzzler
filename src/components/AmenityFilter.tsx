@@ -73,6 +73,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   labelActive: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
   },
 });

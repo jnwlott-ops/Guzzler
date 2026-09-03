@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
   },
   preview: {
     marginTop: spacing.lg,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   confirmText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '700',
     fontSize: 15,
   },

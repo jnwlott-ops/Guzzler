@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.typical,
   },
   stopIndexText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.unknown,
   },
   acceptText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontWeight: '700',
     fontSize: 15,
   },

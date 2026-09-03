@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   segmentSelected: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.raised,
   },
   label: {
     fontSize: 11,
@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   labelSelected: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
 });

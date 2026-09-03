@@ -49,13 +49,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   segmentSelected: {
-    backgroundColor: colors.background,
-    // Lifts the active segment off the track.
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    backgroundColor: colors.raised,
   },
   label: {
     fontSize: 13,
