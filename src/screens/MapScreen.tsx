@@ -135,22 +135,39 @@ export function MapScreen() {
    * driver in Georgia looking at Austin, with no hint that anything was wrong,
    * because the fallback region is a perfectly ordinary-looking map.
    */
+  const centerOnUser = (durationMs: number): boolean => {
+    // The ref is null until the map mounts, and iOS ignores animateToRegion
+    // before the map has laid out — so this reports whether it actually got
+    // to say anything, and the caller decides whether to keep trying.
+    if (!location || !mapRef.current) return false;
+    mapRef.current.animateToRegion(
+      { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+      durationMs,
+    );
+    return true;
+  };
+
   useEffect(() => {
     if (!location || centered.current) return;
-    centered.current = true;
-    mapRef.current?.animateToRegion(
-      { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
-      600,
-    );
+    // Only spend the one-shot if the map was actually there to hear it.
+    // Marking it done on a null ref left the driver stranded in the fallback
+    // region with no second attempt — which is the bug this whole thing is
+    // meant to fix, reintroduced one layer down.
+    centered.current = centerOnUser(600);
   }, [location]);
+
+  /**
+   * The other half of the race: location can land before the map is ready, in
+   * which case the effect above found nothing to talk to.
+   */
+  const handleMapReady = () => {
+    if (centered.current) return;
+    centered.current = centerOnUser(0);
+  };
 
   /** Puts the map back on the driver, from wherever they have panned to. */
   const recenter = () => {
-    if (!location) return;
-    mapRef.current?.animateToRegion(
-      { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
-      400,
-    );
+    centerOnUser(400);
   };
 
   const approach = useApproachAlerts(location, favorites);
@@ -251,6 +268,7 @@ export function MapScreen() {
         onPanDrag={() => {
           centered.current = true;
         }}
+        onMapReady={handleMapReady}
         ref={mapRef}
       >
         {location && range && <RangeRings center={location} range={range} />}
