@@ -25,6 +25,12 @@ export interface TripState {
   start: (destination: string) => Promise<void>;
   approve: (stationId: string) => void;
   reject: (station: Station) => void;
+  /** Station ids the driver picked themselves, which the plan must route through. */
+  chosen: string[];
+  /** Pick `stationId` for a leg, dropping `replacing` if it was the choice there. */
+  choose: (stationId: string, replacing?: string) => void;
+  /** Give the leg back to the planner. */
+  unchoose: (stationId: string) => void;
   /** Puts every rejected station back in the running. */
   restoreRejected: () => void;
   clear: () => void;
@@ -62,9 +68,16 @@ export function useTrip({
   const [approved, setApproved] = useState<string[]>([]);
   const [rejected, setRejected] = useState<Station[]>([]);
 
-  /** Re-runs the planner for a route against the current rejection list. */
+  const [chosen, setChosen] = useState<string[]>([]);
+
+  /** Re-runs the planner against the current rejections and choices. */
   const replan = useCallback(
-    (forRoute: Route, rejectedStations: Station[], driver: Vehicle) => {
+    (
+      forRoute: Route,
+      rejectedStations: Station[],
+      driver: Vehicle,
+      chosenIds: string[] = [],
+    ) => {
       const corridor = stationsAlongRoute(stations, forRoute);
       return planTrip({
         corridor,
@@ -73,6 +86,7 @@ export function useTrip({
         grade,
         ratingDollars,
         excludedStationIds: rejectedStations.map((s) => s.id),
+        pinnedStationIds: chosenIds,
       });
     },
     [stations, grade, ratingDollars],
@@ -99,7 +113,8 @@ export function useTrip({
         setRoute(fetched);
         setApproved([]);
         setRejected([]);
-        setPlan(replan(fetched, [], vehicle));
+        setChosen([]);
+        setPlan(replan(fetched, [], vehicle, []));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not plan that trip.');
         setRoute(undefined);
@@ -123,19 +138,55 @@ export function useTrip({
         ? rejected
         : [...rejected, station];
 
+      // Turning a stop down also drops it as a choice, or the planner would be
+      // told to route through a station the driver just rejected.
+      const nextChosen = chosen.filter((id) => id !== station.id);
+
       setRejected(nextRejected);
+      setChosen(nextChosen);
       // Dropping a stop can shuffle the whole chain, so re-plan rather than
       // splicing it out — the stops after it may no longer be reachable.
-      setPlan(replan(route, nextRejected, vehicle));
+      setPlan(replan(route, nextRejected, vehicle, nextChosen));
     },
-    [route, vehicle, rejected, replan],
+    [route, vehicle, rejected, chosen, replan],
+  );
+
+  /**
+   * Swaps one stop for another the driver picked.
+   *
+   * `replacing` is dropped from the choices at the same time, so choosing a
+   * second station for the same leg replaces the first rather than demanding
+   * the plan visit both.
+   */
+  const choose = useCallback(
+    (stationId: string, replacing?: string) => {
+      if (!route || !vehicle) return;
+      const nextChosen = [
+        ...chosen.filter((id) => id !== replacing && id !== stationId),
+        stationId,
+      ];
+      setChosen(nextChosen);
+      setPlan(replan(route, rejected, vehicle, nextChosen));
+    },
+    [route, vehicle, rejected, chosen, replan],
+  );
+
+  /** Hands the leg back to the planner. */
+  const unchoose = useCallback(
+    (stationId: string) => {
+      if (!route || !vehicle) return;
+      const nextChosen = chosen.filter((id) => id !== stationId);
+      setChosen(nextChosen);
+      setPlan(replan(route, rejected, vehicle, nextChosen));
+    },
+    [route, vehicle, rejected, chosen, replan],
   );
 
   const restoreRejected = useCallback(() => {
     if (!route || !vehicle) return;
     setRejected([]);
-    setPlan(replan(route, [], vehicle));
-  }, [route, vehicle, replan]);
+    setPlan(replan(route, [], vehicle, chosen));
+  }, [route, vehicle, chosen, replan]);
 
   const clear = useCallback(() => {
     setRoute(undefined);
@@ -143,6 +194,7 @@ export function useTrip({
     setError(undefined);
     setApproved([]);
     setRejected([]);
+    setChosen([]);
   }, []);
 
   const pending = useMemo(
@@ -161,6 +213,9 @@ export function useTrip({
     start,
     approve,
     reject,
+    chosen,
+    choose,
+    unchoose,
     restoreRejected,
     clear,
   };

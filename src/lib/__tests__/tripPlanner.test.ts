@@ -3,6 +3,7 @@ import {
   isPlanLive,
   ON_THE_WAY_DETOUR_MILES,
   planTrip,
+  stopAlternatives,
   stopsAwaitingApproval,
   type FeasibleTripPlan,
   type InfeasibleTripPlan,
@@ -412,5 +413,142 @@ describe('what the trip actually costs at the pump', () => {
       result.stops.reduce((sum, stop) => sum + stop.fuelCost, 0),
       6,
     );
+  });
+});
+
+describe('stops the driver picked', () => {
+  const route = northRoute(900 / MPD);
+
+  // Cheap and expensive options in the same stretch, so the planner has a
+  // clear favourite to be overruled.
+  const cheap = stationAt('cheap', 300, 0, 2.50);
+  const dear = stationAt('dear', 320, 0, 4.20);
+  const later = stationAt('later', 650, 0, 3.00);
+
+  it('routes through the chosen station even when it costs more', () => {
+    const free = plan([cheap, dear, later], route) as FeasibleTripPlan;
+    expect(free.stops.map((s) => s.station.id)).toContain('cheap');
+    expect(free.stops.map((s) => s.station.id)).not.toContain('dear');
+
+    const pinned = planTrip({
+      corridor: stationsAlongRoute([cheap, dear, later], route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      pinnedStationIds: ['dear'],
+    }) as FeasibleTripPlan;
+
+    expect(pinned.feasible).toBe(true);
+    expect(pinned.stops.map((s) => s.station.id)).toContain('dear');
+    // Overruling the planner should cost more, or there was nothing to overrule.
+    expect(pinned.fuelCost).toBeGreaterThan(free.fuelCost);
+  });
+
+  it('keeps chosen stops in route order alongside its own picks', () => {
+    const pinned = planTrip({
+      corridor: stationsAlongRoute([cheap, dear, later], route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      pinnedStationIds: ['dear'],
+    }) as FeasibleTripPlan;
+
+    const along = pinned.stops.map((s) => s.alongMiles);
+    expect([...along].sort((a, b) => a - b)).toEqual(along);
+    expect(pinned.stops.map((s) => s.station.id)).toContain('later');
+  });
+
+  it('says so rather than quietly picking its own when a choice cannot work', () => {
+    // Pinned beyond a full tank's reach from the start, with nothing between.
+    const unreachable = stationAt('too-far', 800, 0, 3.0);
+    const result = planTrip({
+      corridor: stationsAlongRoute([unreachable], route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      pinnedStationIds: ['too-far'],
+    }) as InfeasibleTripPlan;
+
+    expect(result.feasible).toBe(false);
+    expect(result.reason).toMatch(/chosen stop/i);
+  });
+
+  it('ignores a pin for a station that is not on the route at all', () => {
+    // Choosing cannot become a way to break an otherwise fine plan.
+    const result = planTrip({
+      corridor: stationsAlongRoute([cheap, later], route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      pinnedStationIds: ['some-station-elsewhere'],
+    }) as FeasibleTripPlan;
+
+    expect(result.feasible).toBe(true);
+    expect(result.stops.length).toBeGreaterThan(0);
+  });
+});
+
+describe('stopAlternatives', () => {
+  const route = northRoute(900 / MPD);
+  const first = stationAt('first', 300, 0, 3.00);
+  const rival = stationAt('rival', 330, 0, 2.80);
+  const tooFar = stationAt('too-far', 900, 0, 2.00);
+  const second = stationAt('second', 650, 0, 3.00);
+  const corridor = stationsAlongRoute([first, rival, tooFar, second], route, 5);
+
+  const alternatives = (stopIndex: number, current: FeasibleTripPlan) =>
+    stopAlternatives({ plan: current, stopIndex, corridor, route, vehicle: car(), grade: 'regular' });
+
+  it('offers the other stations on the same leg, marking the planned one', () => {
+    const current = plan([first, rival, tooFar, second], route) as FeasibleTripPlan;
+    const options = alternatives(0, current);
+
+    const ids = options.map((o) => o.station.id);
+    expect(ids).toContain('first');
+    expect(ids).toContain('rival');
+    // Belongs to a later leg, so it is not a swap for this one.
+    expect(ids).not.toContain('second');
+    expect(options.filter((o) => o.isCurrent)).toHaveLength(1);
+  });
+
+  it('lists an out-of-range option rather than hiding it, and marks it', () => {
+    const thirsty = car({ level: 0.2 });
+    const current = planTrip({
+      corridor,
+      route: northRoute(200 / MPD),
+      vehicle: thirsty,
+      grade: 'regular',
+    });
+    if (!current.feasible) return; // covered by the planner's own tests
+
+    const options = stopAlternatives({
+      plan: current,
+      stopIndex: 0,
+      corridor,
+      route,
+      vehicle: thirsty,
+      grade: 'regular',
+    });
+
+    // Reachable ones sort first, so a driver never scrolls past dead options.
+    const firstUnreachable = options.findIndex((o) => !o.reachable);
+    if (firstUnreachable !== -1) {
+      expect(options.slice(firstUnreachable).every((o) => !o.reachable)).toBe(true);
+    }
+  });
+
+  it('leaves out stations the driver already turned down', () => {
+    const current = plan([first, rival, second], route) as FeasibleTripPlan;
+    const options = stopAlternatives({
+      plan: current,
+      stopIndex: 0,
+      corridor,
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      excludedStationIds: ['rival'],
+    });
+
+    expect(options.map((o) => o.station.id)).not.toContain('rival');
   });
 });

@@ -9,6 +9,10 @@ import type { Route, Station } from '../types';
 interface TripPlanSheetProps {
   route: Route;
   plan: TripPlan;
+  /** Opens the list of other stops on this leg. */
+  onSwapStop: (stopIndex: number) => void;
+  /** Station ids the driver picked, so their legs can say so. */
+  chosenStationIds: readonly string[];
   /** Off-route stops still awaiting a yes or no. */
   pending: PlannedStop[];
   /** True once every off-route stop has been accepted. */
@@ -30,6 +34,8 @@ interface TripPlanSheetProps {
  * me" earns exactly one wrong recommendation before nobody uses it again.
  */
 export function TripPlanSheet({
+  onSwapStop,
+  chosenStationIds,
   route,
   plan,
   pending,
@@ -124,7 +130,12 @@ export function TripPlanSheet({
                       <Text style={styles.stopIndexText}>{awaiting ? '?' : index + 1}</Text>
                     </View>
                     <View style={styles.stopBody}>
-                      <Text style={styles.stopName}>{stop.station.name}</Text>
+                      <Text style={styles.stopName}>
+                        {stop.station.name}
+                        {chosenStationIds.includes(stop.station.id) && (
+                          <Text style={styles.yourPick}>  · your pick</Text>
+                        )}
+                      </Text>
                       <Text style={styles.stopMeta}>
                         {formatMiles(stop.alongMiles)} in ·{' '}
                         {formatPrice(stop.pricePerGallon)}/gal · {stop.units.toFixed(1)} gal
@@ -135,6 +146,18 @@ export function TripPlanSheet({
                       </Text>
                     </View>
                     <Text style={styles.stopCost}>${stop.fuelCost.toFixed(2)}</Text>
+                  </Pressable>
+
+                  {/* The plan is a recommendation, so every stop in it has to
+                      be arguable. Without this the sheet just says "go to
+                      Chevron" and the driver has no say at all. */}
+                  <Pressable
+                    style={styles.swap}
+                    onPress={() => onSwapStop(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose a different stop instead of ${stop.station.name}`}
+                  >
+                    <Text style={styles.swapText}>Stop somewhere else</Text>
                   </Pressable>
 
                   {awaiting && (
@@ -201,6 +224,21 @@ export function TripPlanSheet({
 }
 
 const styles = StyleSheet.create({
+  swap: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    paddingLeft: spacing.xl + spacing.sm,
+  },
+  swapText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  yourPick: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accent,
+  },
   sheet: {
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.lg,

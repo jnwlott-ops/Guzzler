@@ -22,6 +22,7 @@ import { RateStationModal } from '../components/RateStationModal';
 import { ReportPriceModal } from '../components/ReportPriceModal';
 import { StationMarker } from '../components/StationMarker';
 import { StationSheet } from '../components/StationSheet';
+import { StopSwapSheet } from '../components/StopSwapSheet';
 import { TripModal } from '../components/TripModal';
 import { TripPlanSheet } from '../components/TripPlanSheet';
 import { VehicleModal } from '../components/VehicleModal';
@@ -34,8 +35,9 @@ import { useTrip } from '../hooks/useTrip';
 import { FALLBACK_LOCATION, useUserLocation } from '../hooks/useUserLocation';
 import { useVehicle } from '../hooks/useVehicle';
 import { formatPrice } from '../lib/pricing';
+import { stationsAlongRoute } from '../lib/route';
 import { buildDirectionsUrl, type NavApp } from '../lib/navHandoff';
-import { ratingDollarsFor } from '../lib/tripPlanner';
+import { ratingDollarsFor, stopAlternatives } from '../lib/tripPlanner';
 import { estimateRange, formatLevel, formatMiles } from '../lib/range';
 import {
   findRangeDeal,
@@ -113,6 +115,10 @@ export function MapScreen() {
 
   const approach = useApproachAlerts(location, favorites);
 
+  /** Index of the planned stop the driver is reconsidering, if any. */
+  const [swappingStop, setSwappingStop] = useState<number | undefined>();
+
+
   // The same price-vs-quality dial governs the trip planner, so a driver who
   // asks for better stops gets them on the road too, not just on the map.
   const trip = useTrip({
@@ -122,6 +128,26 @@ export function MapScreen() {
     stations,
     ratingDollars: ratingDollarsFor(preferences.priceWeight),
   });
+
+  const swapping = useMemo(() => {
+    if (swappingStop === undefined || !trip.route || !trip.plan?.feasible || !vehicle) {
+      return undefined;
+    }
+    const stop = trip.plan.stops[swappingStop];
+    if (!stop) return undefined;
+    return {
+      stop,
+      alternatives: stopAlternatives({
+        plan: trip.plan,
+        stopIndex: swappingStop,
+        corridor: stationsAlongRoute(stations, trip.route),
+        route: trip.route,
+        vehicle,
+        grade,
+        excludedStationIds: trip.rejected.map((s) => s.id),
+      }),
+    };
+  }, [swappingStop, trip.route, trip.plan, trip.rejected, stations, vehicle, grade]);
 
   const selected = ranked.find((r) => r.station.id === selectedId);
 
@@ -312,7 +338,26 @@ export function MapScreen() {
       {/* The trip plan takes the sheet slot; a tapped station supersedes it. */}
       {trip.route && trip.plan && !selected && (
         <View style={styles.sheetWrapper}>
+          <StopSwapSheet
+            alternatives={swapping?.alternatives}
+            currentName={swapping?.stop.station.name}
+            isChosen={
+              swapping !== undefined && trip.chosen.includes(swapping.stop.station.id)
+            }
+            onChoose={(stationId) => {
+              trip.choose(stationId, swapping?.stop.station.id);
+              setSwappingStop(undefined);
+            }}
+            onLetGuzzlerPick={() => {
+              if (swapping) trip.unchoose(swapping.stop.station.id);
+              setSwappingStop(undefined);
+            }}
+            onClose={() => setSwappingStop(undefined)}
+          />
+
           <TripPlanSheet
+            onSwapStop={setSwappingStop}
+            chosenStationIds={trip.chosen}
             route={trip.route}
             plan={trip.plan}
             pending={trip.pending}

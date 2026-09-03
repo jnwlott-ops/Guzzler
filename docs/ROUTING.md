@@ -47,6 +47,40 @@ The same principle governs the "don't fill up yet" banner on the map: it carries
 an explicit **No thanks**, and a dismissed deal stays dismissed for the session.
 A standing suggestion the driver can't refuse is a nudge, not a suggestion.
 
+## Every stop is arguable
+
+The approval gate above only covers stops that pull the driver off their route.
+Stops that sit right on it were simply announced: the sheet said "Start with
+Chevron" and there was nothing to tap. A plan you cannot argue with is a plan
+you have to take on faith, which is the opposite of the promise.
+
+So every stop has a **Stop somewhere else** link listing the other stations on
+that leg — between the previous fill and the next one, which is the window
+where a swap even means anything. Offering all of them on a 500-mile route
+would be a list, not a choice.
+
+Choosing one pins it: `planTrip` takes `pinnedStationIds` and must route
+through every one. Because candidates are sorted by distance along the route,
+"this plan includes every pin" is the same statement as "no leg jumps over
+one", so the constraint is a handful of forbidden edges in the existing search
+rather than a second algorithm. Nothing is added to the cost function — an
+overruled planner should produce the driver's stop at the driver's price, not
+a rationalization of it.
+
+Three rules hold here:
+
+1. **A choice that cannot work says so.** A pin out of range makes the plan
+   infeasible with a reason naming the choice, rather than being silently
+   dropped and re-picked.
+2. **Unreachable options are listed, not hidden.** "That one is too far on this
+   tank" is the most useful thing the screen can say about a station the driver
+   was already eyeing. They are disabled and sorted last.
+3. **There is always a way back.** A pinned leg offers "Let Guzzler pick this
+   one" — the recommendation stays first-class.
+
+Rejecting a station also clears it as a choice, or the planner would be told to
+route through a stop the driver just turned down.
+
 ## It's not "find the highest-rated stop"
 
 That framing produces bad plans. The real problem is a constrained

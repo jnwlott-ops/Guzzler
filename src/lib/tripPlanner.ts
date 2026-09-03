@@ -170,6 +170,12 @@ export interface PlanTripOptions {
    * so a "no" stays a no rather than resurfacing on the next recalculation.
    */
   excludedStationIds?: readonly string[];
+  /**
+   * Stations the driver has chosen. The plan must route through every one of
+   * them, in route order, and says so plainly when it cannot rather than
+   * quietly dropping the choice and picking its own stop again.
+   */
+  pinnedStationIds?: readonly string[];
 }
 
 /**
@@ -186,8 +192,10 @@ export function planTrip({
   grade,
   ratingDollars = RATING_DOLLARS,
   excludedStationIds = [],
+  pinnedStationIds = [],
 }: PlanTripOptions): TripPlan {
   const excluded = new Set(excludedStationIds);
+  const pinned = new Set(pinnedStationIds);
   const totalMiles = route.distanceMiles;
 
   // Range on a full tank, and on what's in the tank right now, both measured
@@ -231,6 +239,25 @@ export function planTrip({
   const previous = new Array<number>(n).fill(-1);
   const legMiles = new Array<number>(n).fill(0);
 
+  /**
+   * Honouring the driver's chosen stops, expressed as edges the search may not
+   * take.
+   *
+   * Candidates are sorted by distance along the route, so "this plan includes
+   * every pin" is the same statement as "no leg jumps over one". Forbidding
+   * those legs is enough — there is nothing to add to the cost function, and a
+   * pin that cannot be reached simply leaves the search with no route to the
+   * end, which surfaces as an ordinary infeasible plan rather than a silently
+   * ignored choice.
+   */
+  const pinnedIndexes = candidates
+    .map((c, i) => (pinned.has(c.station.id) ? i : -1))
+    .filter((i) => i !== -1);
+
+  /** `from` is -1 for the start of the trip, `to` is n for the destination. */
+  const skipsPin = (from: number, to: number): boolean =>
+    pinnedIndexes.some((p) => p > from && p < to);
+
   /** What stopping at `j` costs, having burned `miles` since the last fill. */
   const stopCost = (j: number, miles: number): number => {
     const c = candidates[j];
@@ -256,6 +283,7 @@ export function planTrip({
 
   // Seed: stops reachable on the fuel already aboard.
   for (let j = 0; j < n; j++) {
+    if (skipsPin(-1, j)) continue;
     const miles = candidates[j].alongMiles + candidates[j].detourMiles;
     if (miles <= startRange) {
       cost[j] = stopCost(j, miles);
@@ -269,6 +297,7 @@ export function planTrip({
     if (!Number.isFinite(cost[i])) continue;
 
     for (let j = i + 1; j < n; j++) {
+      if (skipsPin(i, j)) continue;
       const miles = candidates[j].alongMiles - candidates[i].alongMiles + candidates[j].detourMiles;
       if (miles > fullRange) continue;
 
@@ -286,6 +315,7 @@ export function planTrip({
   let bestTotal = Infinity;
   for (let i = 0; i < n; i++) {
     if (!Number.isFinite(cost[i])) continue;
+    if (skipsPin(i, n)) continue;
     if (totalMiles - candidates[i].alongMiles > fullRange) continue;
 
     if (cost[i] < bestTotal) {
@@ -310,9 +340,11 @@ export function planTrip({
       reachableToMiles: furthest,
       shortfallMiles: (nextNeeded?.alongMiles ?? totalMiles) - furthest - fullRange,
       reason:
-        reachable.length === 0
-          ? 'No station on this route is reachable on the fuel you have.'
-          : 'There is a stretch of this route longer than a full tank.',
+        pinnedIndexes.length > 0
+          ? "Your chosen stop doesn't work on this route — it's out of range, or the leg after it is too long. Undo it to let Guzzler pick."
+          : reachable.length === 0
+            ? 'No station on this route is reachable on the fuel you have.'
+            : 'There is a stretch of this route longer than a full tank.',
     };
   }
 
@@ -358,4 +390,93 @@ export function planTrip({
     totalDetourMiles: stops.reduce((sum, s) => sum + s.detourMiles, 0),
     arriveWithMiles: Math.max(0, fullRange - (totalMiles - lastStop.alongMiles)),
   };
+}
+
+export interface StopAlternative {
+  station: Station;
+  alongMiles: number;
+  detourMiles: number;
+  pricePerGallon: number;
+  /**
+   * False when this stop is further along than the fuel aboard at the previous
+   * stop can carry the driver. Still listed — "you'd never make it" is
+   * information — but never presented as a choice they can just take.
+   */
+  reachable: boolean;
+  /** True for the stop currently in the plan. */
+  isCurrent: boolean;
+}
+
+export interface StopAlternativesOptions {
+  plan: FeasibleTripPlan;
+  /** Which stop in the plan is being reconsidered. */
+  stopIndex: number;
+  corridor: CorridorStation[];
+  route: Route;
+  vehicle: Vehicle;
+  grade: FuelGrade;
+  excludedStationIds?: readonly string[];
+}
+
+/**
+ * The other places the driver could stop instead of the one Guzzler picked.
+ *
+ * Scoped to the leg the stop sits in — between the stop before it and the one
+ * after — because that is the window where a swap is even meaningful. Offering
+ * every station on a 500-mile route would be a list, not a choice.
+ *
+ * This deliberately does not re-run the search per candidate. Picking one pins
+ * it and the planner re-plans for real; `reachable` here is the cheap check
+ * that catches the obviously impossible before the driver taps it.
+ */
+export function stopAlternatives({
+  plan,
+  stopIndex,
+  corridor,
+  route,
+  vehicle,
+  grade,
+  excludedStationIds = [],
+}: StopAlternativesOptions): StopAlternative[] {
+  const current = plan.stops[stopIndex];
+  if (!current) return [];
+
+  const excluded = new Set(excludedStationIds);
+  const previous = plan.stops[stopIndex - 1];
+  const next = plan.stops[stopIndex + 1];
+
+  // The window this stop lives in: after the previous fill, before the next.
+  const from = previous?.alongMiles ?? 0;
+  const to = next?.alongMiles ?? route.distanceMiles;
+
+  const reserveMiles = vehicle.capacity * RESERVE_FRACTION * vehicle.efficiency;
+  const fullRange = Math.max(0, vehicle.capacity * vehicle.efficiency - reserveMiles);
+  const startRange = Math.max(
+    0,
+    vehicle.capacity * Math.min(1, Math.max(0, vehicle.level)) * vehicle.efficiency - reserveMiles,
+  );
+  // Fuel aboard entering this leg: a full tank, unless this is the first stop.
+  const available = previous ? fullRange : startRange;
+
+  return corridor
+    .filter((c) => c.alongMiles > from && c.alongMiles < to)
+    .filter((c) => !excluded.has(c.station.id))
+    .map((c) => {
+      const price = priceFor(c.station, grade);
+      if (price === undefined) return undefined;
+      return {
+        station: c.station,
+        alongMiles: c.alongMiles,
+        detourMiles: c.detourMiles,
+        pricePerGallon: price,
+        reachable: c.alongMiles - from + c.detourMiles <= available,
+        isCurrent: c.station.id === current.station.id,
+      };
+    })
+    .filter((a): a is StopAlternative => a !== undefined)
+    .sort((a, b) => {
+      // Reachable first, then cheapest — the two things a driver is deciding on.
+      if (a.reachable !== b.reachable) return a.reachable ? -1 : 1;
+      return a.pricePerGallon - b.pricePerGallon;
+    });
 }
