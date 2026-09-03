@@ -15,12 +15,12 @@
  * label rules come after the blanket geometry rules they refine.
  */
 export const darkMapStyle = [
-  // Asphalt at dusk, one shade off the panel so the map still reads as ground
-  // rather than as more chrome.
-  { elementType: 'geometry', stylers: [{ color: '#1B2027' }] },
+  // Asphalt at night, one shade off the panel so the map still reads as
+  // ground rather than as more chrome.
+  { elementType: 'geometry', stylers: [{ color: '#151A21' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#8B95A3' }] },
   // Halo behind label text, dark enough that thin type stays legible at speed.
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#12161B' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0B0E13' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 
   // Google's own POIs are off. Ours are the point.
@@ -28,23 +28,23 @@ export const darkMapStyle = [
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
 
   // Parks stay, faintly — they are the landmarks people orient by.
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1E2A24' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#182420' }] },
 
   // Roads climb in brightness with importance, so the highway you are on is
   // the brightest line under the pins.
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#262E38' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1B2027' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#232B35' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#151A21' }] },
   { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#7C8595' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#303945' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3C4756' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#232A33' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#2D3644' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3A4554' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1B222B' }] },
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#A9B3C1' }] },
 
   // Water reads clearly darker than land — the one place on the map you can
   // never drive, so it should never be mistaken for road.
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0E1319' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#080B10' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3E4A59' }] },
 
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2E3641' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2C333D' }] },
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
 ];

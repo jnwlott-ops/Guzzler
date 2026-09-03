@@ -1,65 +1,101 @@
 import type { PriceVerdict } from './lib/pricing';
 
 /**
- * Guzzler's look: the chrome is an instrument panel floating over the world.
+ * Guzzler's look: a hot rod decal on a black dashboard.
  *
- * Dark rather than white on purpose. This is a driving app, so the map is the
- * thing being read and the controls should recede into a dashboard around it —
- * and a dark panel is far kinder at night, which is when hunting for fuel
- * actually hurts. It also gets the app off the default white-card-and-iOS-blue
- * look that every React Native project starts with.
+ * The name is a joke and the app should sound like it means the joke. So the
+ * reference is arcade — Crazy Taxi flame-job swag: near-black ground, a flame
+ * ramp from cream through orange to deep red, heavy slanted type that leans
+ * like it's already moving.
+ *
+ * There is exactly one rule that keeps this from wrecking the map, and every
+ * color below obeys it:
+ *
+ *   Brand is a GRADIENT and lives on chrome. Data is FLAT and lives on pins.
+ *
+ * A driver glancing down at 70mph is reading price verdicts off pin color. If
+ * the brand and the data share a hue, that glance gets slower, and this app is
+ * only worth anything if that glance is fast. So the flame ramp never touches
+ * a pin, and `gouge` was pulled toward pink-red specifically so it can never
+ * be mistaken for the flame's tail.
  */
+
+/**
+ * The flame, cool tip to hot base. Ordered for a top-to-bottom gradient fill,
+ * which is how a real flame job is painted: light where it licks, deep where
+ * it burns.
+ */
+export const flame = {
+  tip: '#FFF07A',
+  gold: '#FFC53D',
+  orange: '#FF7A00',
+  deep: '#E02D1B',
+} as const;
+
+/** The flame as a gradient stop array, for expo-linear-gradient. */
+export const FLAME_GRADIENT = [flame.tip, flame.gold, flame.orange, flame.deep] as const;
+
 export const colors = {
-  /** The instrument panel itself — asphalt at dusk. */
-  background: '#14181E',
+  /** Near-black. Flames need something to burn against. */
+  background: '#0E1116',
   /** A raised surface within the panel: input fields, inactive segments. */
-  surface: '#1E242D',
+  surface: '#191E26',
   /** Hairlines. Visible on the panel without becoming a drawn box. */
-  border: '#2E3641',
+  border: '#2C333D',
 
-  /** Instrument lettering — warm white rather than pure, so it doesn't glare. */
-  text: '#F3F1EC',
-  textMuted: '#98A2B0',
-
-  /**
-   * Signal yellow. The color of fuel price signage and highway warnings, and
-   * the one place Guzzler spends brand: active controls, the route line, the
-   * star on the best station.
-   */
-  accent: '#FFC53D',
-  /** Text on an accent fill. Near-black rather than white — yellow needs it. */
-  onAccent: '#1A1400',
+  /** Warm cream rather than white — pure white is clinical, this is not. */
+  text: '#FFF4E2',
+  textMuted: '#93A0B0',
 
   /**
-   * The active face of a control inside the panel — a segment that is switched
-   * on. Deliberately quiet: only one control per screen gets the accent, and
-   * every other selected state uses this instead, so the yellow keeps meaning
-   * something.
+   * The flat stand-in for the flame, where a gradient is overkill or
+   * unavailable: a selected control, an icon, the route line on the map.
    */
-  raised: '#39424F',
+  accent: flame.gold,
+  /** Text on an accent or flame fill. Near-black — hot yellow demands it. */
+  onAccent: '#1A0F00',
+
+  /**
+   * The active face of a control inside the panel. Deliberately quiet: only
+   * the primary action gets fire, and every other selected state uses this, so
+   * the flame keeps meaning something.
+   */
+  raised: '#333C48',
 
   /**
    * An inverted emphasis surface, for the rare element that should sit *above*
    * the panel rather than in it. A separate token because using the text color
    * as a background silently breaks the moment the theme flips.
    */
-  strong: '#F3F1EC',
-  onStrong: '#14181E',
+  strong: '#FFF4E2',
+  onStrong: '#0E1116',
 
   /**
-   * Verdict colors. Brightened for a dark ground, and deliberately *not* the
-   * accent — semantic color carries data, brand color carries identity, and
-   * letting them share a hue makes both harder to read.
+   * Verdict colors — flat, always, and never drawn from the flame ramp.
    *
-   * "Typical" is neutral slate rather than amber: the middle case genuinely is
-   * "nothing to see here," and reserving amber keeps it from competing with
-   * the brand and with gouge. Pins also carry text, so color is never the only
-   * cue for red-green color vision deficiency.
+   * `gouge` is a pink-red rather than the flame's `deep` scarlet, so a pin can
+   * never be confused with brand chrome. `typical` is neutral slate because
+   * the middle case genuinely is "nothing to see here." Pins also carry the
+   * price as text, so color is never the only cue for red-green color vision
+   * deficiency.
    */
-  deal: '#35D07F',
+  deal: '#3DDC84',
   typical: '#7C8595',
-  gouge: '#FF5C5C',
+  gouge: '#FF4D6D',
   unknown: '#5A6472',
+} as const;
+
+/**
+ * The voice, for the few places the brand gets to shout: the primary action,
+ * the splash, a best-in-view badge. Heavy, slanted and shouting — which is
+ * exactly why it stays off anything a driver has to *read* rather than
+ * recognize. Prices, names and addresses are set in the plain face.
+ */
+export const brandType = {
+  fontWeight: '900',
+  fontStyle: 'italic',
+  letterSpacing: 0.6,
+  textTransform: 'uppercase',
 } as const;
 
 export const verdictColor: Record<PriceVerdict, string> = {

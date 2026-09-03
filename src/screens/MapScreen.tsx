@@ -12,6 +12,7 @@ import { MapView, Polyline, PROVIDER_GOOGLE } from '../components/PlatformMap';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AmenityFilter } from '../components/AmenityFilter';
+import { FlameButton } from '../components/FlameButton';
 import { ApproachBanner } from '../components/ApproachBanner';
 import { GradeSelector } from '../components/GradeSelector';
 import { PriorityControl } from '../components/PriorityControl';
@@ -217,32 +218,27 @@ export function MapScreen() {
 
         {/* Range summary doubles as the entry point to vehicle setup. */}
         <View style={styles.rangeBar}>
-          <Pressable
+          <FlameButton
+            quiet
             style={styles.rangeChip}
-            onPress={() => setEditingVehicle(true)}
-            accessibilityRole="button"
+            label={
+              range && vehicle
+                ? `${formatMiles(range.comfortableMiles)} range · ${formatLevel(vehicle.level)}`
+                : 'Add your vehicle'
+            }
             accessibilityLabel={
               range
                 ? `${vehicle?.label}, ${formatMiles(range.comfortableMiles)} of range. Edit vehicle.`
                 : 'Add your vehicle to see your range'
             }
-          >
-            <Text style={styles.rangeIcon}>{vehicle?.fuelType === 'ev' ? '⚡' : '⛽'}</Text>
-            <Text style={styles.rangeText} numberOfLines={1}>
-              {range && vehicle
-                ? `${formatMiles(range.comfortableMiles)} range · ${formatLevel(vehicle.level)}`
-                : 'Add your vehicle'}
-            </Text>
-          </Pressable>
+            onPress={() => setEditingVehicle(true)}
+          />
 
-          <Pressable
-            style={styles.tripChip}
-            onPress={() => (trip.route ? trip.clear() : setPlanningTrip(true))}
-            accessibilityRole="button"
+          <FlameButton
+            label={trip.route ? 'End trip' : 'Plan trip'}
             accessibilityLabel={trip.route ? 'Clear the planned trip' : 'Plan a trip'}
-          >
-            <Text style={styles.tripText}>{trip.route ? '✕ Trip' : '🧭 Plan trip'}</Text>
-          </Pressable>
+            onPress={() => (trip.route ? trip.clear() : setPlanningTrip(true))}
+          />
         </View>
 
         {/* Saved places coming up. Nearest first, so the most urgent is on top. */}
@@ -438,46 +434,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  tripChip: {
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 999,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  tripText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.onAccent,
-  },
   rangeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 999,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  rangeIcon: {
-    fontSize: 13,
-    marginRight: spacing.xs + 1,
-  },
-  rangeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
+    flex: 1,
   },
   dealBanner: {
     marginTop: spacing.sm,

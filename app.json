@@ -20,7 +20,7 @@
     "android": {
       "package": "com.guzzler.app",
       "adaptiveIcon": {
-        "backgroundColor": "#14181E",
+        "backgroundColor": "#0E1116",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -31,7 +31,10 @@
           "apiKey": "REPLACE_WITH_ANDROID_GOOGLE_MAPS_API_KEY"
         }
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,7 +45,17 @@
         {
           "locationWhenInUsePermission": "Guzzler uses your location to show gas prices at stations near you."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 300,
+          "resizeMode": "contain",
+          "backgroundColor": "#0E1116"
+        }
       ]
-    ]
+    ],
+    "backgroundColor": "#0E1116"
   }
 }

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Marker } from './PlatformMap';
 
 import { formatPinPrice, type PriceVerdict } from '../lib/pricing';
-import { radius, verdictColor } from '../theme';
+import { flame, radius, verdictColor } from '../theme';
 import type { Station } from '../types';
 
 interface StationMarkerProps {
@@ -72,11 +72,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.9)',
   },
   bubbleBest: {
-    borderColor: '#FFFFFF',
+    // The best pin in view is the one place brand touches the map, and it is
+    // a ring rather than a fill — the bubble still has to carry its verdict
+    // color, which is the thing being read.
+    borderColor: flame.gold,
     borderWidth: 2.5,
   },
   star: {
-    color: '#FFFFFF',
+    color: flame.gold,
     fontSize: 10,
     marginRight: 3,
   },
