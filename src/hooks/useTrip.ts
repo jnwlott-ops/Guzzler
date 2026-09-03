@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { activeFeed } from '../data/priceFeed';
 import { activeRouteProvider } from '../data/routeProvider';
@@ -85,9 +85,8 @@ export function useTrip({
       rejectedStations: Station[],
       driver: Vehicle,
       chosenIds: string[] = [],
-      alongRoute: Station[] = routeStations,
     ) => {
-      const corridor = stationsAlongRoute(alongRoute, forRoute);
+      const corridor = stationsAlongRoute(routeStations, forRoute);
       return planTrip({
         corridor,
         route: forRoute,
@@ -127,7 +126,6 @@ export function useTrip({
         setApproved([]);
         setRejected([]);
         setChosen([]);
-        setPlan(replan(fetched, [], vehicle, [], along));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not plan that trip.');
         setRoute(undefined);
@@ -136,7 +134,7 @@ export function useTrip({
         setLoading(false);
       }
     },
-    [origin, vehicle, grade, replan],
+    [origin, vehicle],
   );
 
   const approve = useCallback((stationId: string) => {
@@ -155,13 +153,13 @@ export function useTrip({
       // told to route through a station the driver just rejected.
       const nextChosen = chosen.filter((id) => id !== station.id);
 
+      // Dropping a stop can shuffle the whole chain, so the effect below
+      // re-plans from scratch rather than splicing it out — the stops after it
+      // may no longer be reachable.
       setRejected(nextRejected);
       setChosen(nextChosen);
-      // Dropping a stop can shuffle the whole chain, so re-plan rather than
-      // splicing it out — the stops after it may no longer be reachable.
-      setPlan(replan(route, nextRejected, vehicle, nextChosen));
     },
-    [route, vehicle, rejected, chosen, replan],
+    [route, vehicle, rejected, chosen],
   );
 
   /**
@@ -179,27 +177,40 @@ export function useTrip({
         stationId,
       ];
       setChosen(nextChosen);
-      setPlan(replan(route, rejected, vehicle, nextChosen));
     },
-    [route, vehicle, rejected, chosen, replan],
+    [route, vehicle, chosen],
   );
 
   /** Hands the leg back to the planner. */
   const unchoose = useCallback(
     (stationId: string) => {
       if (!route || !vehicle) return;
-      const nextChosen = chosen.filter((id) => id !== stationId);
-      setChosen(nextChosen);
-      setPlan(replan(route, rejected, vehicle, nextChosen));
+      setChosen(chosen.filter((id) => id !== stationId));
     },
-    [route, vehicle, rejected, chosen, replan],
+    [route, vehicle, chosen],
   );
 
   const restoreRejected = useCallback(() => {
     if (!route || !vehicle) return;
     setRejected([]);
-    setPlan(replan(route, [], vehicle, chosen));
-  }, [route, vehicle, chosen, replan]);
+  }, [route, vehicle]);
+
+  /**
+   * The plan is derived state, and this is the only place it is computed.
+   *
+   * It used to be set by hand in five places, which meant every input had to
+   * be remembered at each of them — and fuel level was remembered at none. A
+   * driver who topped up mid-trip kept a plan built for the tank they no
+   * longer had, which is the one number a fuel app must not be stale about.
+   * Grade and the price-vs-quality dial were stale for the same reason.
+   *
+   * Rejections, choices and approvals deliberately survive: they are the
+   * driver's decisions about *stations*, not about the tank.
+   */
+  useEffect(() => {
+    if (!route || !vehicle) return;
+    setPlan(replan(route, rejected, vehicle, chosen));
+  }, [route, vehicle, rejected, chosen, replan]);
 
   const clear = useCallback(() => {
     setRoute(undefined);
