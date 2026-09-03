@@ -158,6 +158,72 @@ export function ratingDollarsFor(priceWeight: number): number {
   return RATING_DOLLARS * ((1 - weight) / 0.35);
 }
 
+/**
+ * How much road each thinning bin covers, and how many stops survive in each.
+ *
+ * See `thinCandidates`. Ten miles is short enough that the choice inside a bin
+ * barely matters — four stations in the same ten-mile stretch are the same
+ * stop as far as a plan is concerned — and long enough to bound the search.
+ */
+const BIN_MILES = 10;
+const PER_BIN = 4;
+
+/**
+ * Reduces a corridor to the stops actually worth searching over.
+ *
+ * The search is O(n squared) in candidates, which was fine when the corridor
+ * came from one map screen and held dozens. Fetching stations along the whole
+ * route changed that overnight: Atlanta to Austin yields about 10,700
+ * candidates, and the search took nineteen seconds on a desktop — call it a
+ * frozen minute on a phone.
+ *
+ * Only a handful of stops end up in any plan, and among stations within the
+ * same ten miles of road the cheap ones dominate: a costlier neighbour can
+ * only win by being on the way, which the detour term already prices. So each
+ * bin keeps its best few by the same dollars the planner optimizes in, and the
+ * rest cannot change the answer.
+ *
+ * Stations the driver chose are exempt — a pin thinned away would turn their
+ * choice into an infeasible plan.
+ */
+function thinCandidates(
+  candidates: CorridorStation[],
+  grade: FuelGrade,
+  ratingDollars: number,
+  pinned: ReadonlySet<string>,
+): CorridorStation[] {
+  const bins = new Map<number, CorridorStation[]>();
+  const kept: CorridorStation[] = [];
+
+  for (const candidate of candidates) {
+    if (pinned.has(candidate.station.id)) {
+      kept.push(candidate);
+      continue;
+    }
+    const bin = Math.floor(candidate.alongMiles / BIN_MILES);
+    const existing = bins.get(bin);
+    if (existing) existing.push(candidate);
+    else bins.set(bin, [candidate]);
+  }
+
+  /** Same currency the search uses, minus the fuel volume it cannot know yet. */
+  const attractiveness = (c: CorridorStation): number => {
+    const rating = effectiveRating(c.station);
+    return (
+      priceFor(c.station, grade)! +
+      c.detourMiles * DETOUR_DOLLARS_PER_MILE -
+      (rating === undefined ? 0 : (rating - 3) * ratingDollars) / 10
+    );
+  };
+
+  for (const bin of bins.values()) {
+    bin.sort((a, b) => attractiveness(a) - attractiveness(b));
+    kept.push(...bin.slice(0, PER_BIN));
+  }
+
+  return kept.sort((a, b) => a.alongMiles - b.alongMiles);
+}
+
 export interface PlanTripOptions {
   corridor: CorridorStation[];
   route: Route;
@@ -220,7 +286,8 @@ export function planTrip({
 
   // Only stations that sell the grade, and that the driver hasn't rejected.
   const sellsGrade = corridor.filter((c) => priceFor(c.station, grade) !== undefined);
-  const candidates = sellsGrade.filter((c) => !excluded.has(c.station.id));
+  const usable = sellsGrade.filter((c) => !excluded.has(c.station.id));
+  const candidates = thinCandidates(usable, grade, ratingDollars, pinned);
 
   if (candidates.length === 0) {
     return {

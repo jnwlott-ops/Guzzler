@@ -12,8 +12,15 @@ const MILES_PER_DEG_LAT = 69.047;
  */
 const SAMPLE_EVERY_MILES = 6;
 
-/** Half-width of each query window. Wider than the planner's 5-mile corridor. */
-const WINDOW_MILES = 10;
+/**
+ * Half-width of each query window.
+ *
+ * Comfortably wider than the planner's 5-mile corridor and no wider: window
+ * area is what the feed has to produce and what the corridor filter then has
+ * to walk, and everything past the corridor edge is generated only to be
+ * thrown away.
+ */
+const WINDOW_MILES = 8;
 
 /**
  * Ceiling on requests for one route. A coast-to-coast trip gets sampled more
@@ -22,8 +29,14 @@ const WINDOW_MILES = 10;
  */
 const MAX_WINDOWS = 120;
 
-/** How many windows to have in flight at once. */
-const CONCURRENCY = 6;
+/**
+ * How many windows to have in flight at once.
+ *
+ * Wall time is dominated by round trips, not bytes: a long route is 100+
+ * windows, so six at a time meant twenty sequential waits before the driver
+ * saw a plan.
+ */
+const CONCURRENCY = 12;
 
 /** Points spaced along the route, always including its start and end. */
 function sampleRoute(route: Route, everyMiles: number): LatLng[] {

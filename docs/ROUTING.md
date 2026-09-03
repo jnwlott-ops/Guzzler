@@ -104,8 +104,26 @@ stopCost = STOP_DOLLARS
 ```
 
 DP rather than greedy on purpose: greedily taking the cheapest reachable
-station can leave you unable to reach anything from there. Corridors hold
-dozens to low hundreds of stations, so O(n²) is comfortably fast.
+station can leave you unable to reach anything from there.
+
+### Thinning, because O(n²) stopped being free
+
+That bound was fine when the corridor came from one map screen and held
+dozens. Fetching stations along the whole route changed it overnight: Atlanta
+to Austin yields ~10,700 candidates and the search took **19 seconds on a
+desktop** — a frozen minute on a phone.
+
+`thinCandidates` bins the corridor by distance along the route (10 miles) and
+keeps the best `PER_BIN` in each by the same dollars the search optimizes in.
+Four stations within the same ten miles of road are the same stop as far as a
+plan is concerned, and among them the cheap ones dominate — a costlier
+neighbour can only win by being more on the way, which the detour term already
+prices.
+
+Stations the driver pinned are exempt: thinning one away would turn their
+choice into an infeasible plan.
+
+Plan time went 18,881 ms → 92 ms on that route, same plan.
 
 ### The knobs
 

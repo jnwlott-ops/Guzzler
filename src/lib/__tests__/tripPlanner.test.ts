@@ -552,3 +552,67 @@ describe('stopAlternatives', () => {
     expect(options.map((o) => o.station.id)).not.toContain('rival');
   });
 });
+
+describe('dense corridors', () => {
+  // Fetching stations along a whole route hands the planner thousands of
+  // candidates instead of dozens, and the search is O(n squared). Thinning
+  // bounds it — these guard the two ways that could go wrong.
+
+  /** `count` stations packed into the same stretch, all priced `price`. */
+  function crowd(count: number, atMiles: number, price: number, prefix: string) {
+    return Array.from({ length: count }, (_, i) =>
+      stationAt(`${prefix}${i}`, atMiles + i * 0.05, 0, price),
+    );
+  }
+
+  // 400 miles on a 262.5-mile usable range: one stop, and it has to sit
+  // inside the first tank.
+  const route = northRoute(400 / MPD);
+
+  it('still finds the cheap one buried in a crowd', () => {
+    // A bargain surrounded by fifty dearer neighbours in the same bin. If
+    // thinning kept an arbitrary few, the plan would quietly cost more.
+    const stations = [...crowd(50, 150, 3.9, 'dear'), stationAt('bargain', 152, 0, 2.1)];
+
+    const result = plan(stations, route) as FeasibleTripPlan;
+
+    expect(result.feasible).toBe(true);
+    expect(result.stops.map((s) => s.station.id)).toContain('bargain');
+  });
+
+  it('keeps a chosen station that thinning would otherwise drop', () => {
+    // Pinning the most expensive station in a crowded bin: exactly the one
+    // thinning discards first, and dropping it would turn the driver's choice
+    // into an infeasible plan.
+    const stations = [...crowd(60, 150, 2.5, 'cheap'), stationAt('mine', 155, 0, 4.8)];
+
+    const result = planTrip({
+      corridor: stationsAlongRoute(stations, route, 5),
+      route,
+      vehicle: car(),
+      grade: 'regular',
+      pinnedStationIds: ['mine'],
+    }) as FeasibleTripPlan;
+
+    expect(result.feasible).toBe(true);
+    expect(result.stops.map((s) => s.station.id)).toContain('mine');
+  });
+
+  it('plans a crowded long route quickly', () => {
+    const long = northRoute(900 / MPD);
+    const stations = Array.from({ length: 1500 }, (_, i) =>
+      stationAt(`s${i}`, (i * 890) / 1500, 0, 2.5 + (i % 17) * 0.05),
+    );
+    const corridor = stationsAlongRoute(stations, long, 5);
+    expect(corridor.length).toBeGreaterThan(1000);
+
+    const started = Date.now();
+    const result = planTrip({ corridor, route: long, vehicle: car(), grade: 'regular' });
+    const elapsed = Date.now() - started;
+
+    expect(result.feasible).toBe(true);
+    // Unthinned this is a multi-second freeze on a phone. Generous bound so
+    // the test is about the order of magnitude, not the machine it runs on.
+    expect(elapsed).toBeLessThan(1000);
+  });
+});
