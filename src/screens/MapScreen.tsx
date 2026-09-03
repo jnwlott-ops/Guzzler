@@ -73,7 +73,14 @@ export function MapScreen() {
   const { preferences, presetId, setPreset } = usePreferences();
   const { favorites, isFavorite, toggle: toggleFavorite } = useFavorites();
 
-  const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
+  const {
+    vehicle,
+    // Until storage answers, `vehicle` is undefined for a reason that has
+    // nothing to do with the driver not owning one — see the chip below.
+    ready: vehicleReady,
+    save: saveVehicle,
+    clear: clearVehicle,
+  } = useVehicle();
   const range = useMemo(() => estimateRange(vehicle), [vehicle]);
 
   // Typed off the native map; the web stand-in ignores refs, so every call
@@ -308,21 +315,32 @@ export function MapScreen() {
         <View style={styles.rangeBar}>
           <FlameButton
             quiet
+            disabled={!vehicleReady}
             style={styles.rangeChip}
             label={
-              range && vehicle
-                ? `${formatMiles(range.comfortableMiles)} range · ${formatLevel(vehicle.level)}`
-                : 'Add your vehicle'
+              // "Add your vehicle" before storage has answered is a claim about
+              // the driver, and a false one for anyone who already saved a car.
+              // A dash says the only true thing: we don't know yet.
+              !vehicleReady
+                ? '—'
+                : range && vehicle
+                  ? `${formatMiles(range.comfortableMiles)} range · ${formatLevel(vehicle.level)}`
+                  : 'Add your vehicle'
             }
             accessibilityLabel={
-              range
-                ? `${vehicle?.label}, ${formatMiles(range.comfortableMiles)} of range. Edit vehicle.`
-                : 'Add your vehicle to see your range'
+              !vehicleReady
+                ? 'Checking your saved vehicle'
+                : range
+                  ? `${vehicle?.label}, ${formatMiles(range.comfortableMiles)} of range. Edit vehicle.`
+                  : 'Add your vehicle to see your range'
             }
             onPress={() => setEditingVehicle(true)}
           />
 
           <FlameButton
+            // Planning without a vehicle fails with "add your vehicle first",
+            // which would be wrong for a driver whose car is still loading.
+            disabled={!vehicleReady}
             label={trip.route ? 'End trip' : 'Plan trip'}
             accessibilityLabel={trip.route ? 'Clear the planned trip' : 'Plan a trip'}
             onPress={() => (trip.route ? trip.clear() : setPlanningTrip(true))}

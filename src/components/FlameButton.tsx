@@ -9,6 +9,7 @@ interface FlameButtonProps {
   accessibilityLabel?: string;
   /** Drops the fire for a plain outlined chip — same shape, no shouting. */
   quiet?: boolean;
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -30,14 +31,22 @@ export function FlameButton({
   onPress,
   accessibilityLabel,
   quiet = false,
+  disabled = false,
   style,
 }: FlameButtonProps) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [styles.press, pressed && styles.pressed, style]}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        styles.press,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+        style,
+      ]}
     >
       {quiet ? (
         <View style={[styles.chip, styles.quiet]}>
@@ -67,6 +76,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  disabled: {
+    opacity: 0.5,
   },
   chip: {
     flexDirection: 'row',
