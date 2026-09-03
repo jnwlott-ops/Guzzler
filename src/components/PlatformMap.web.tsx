@@ -21,6 +21,8 @@ export const PROVIDER_GOOGLE = 'google';
 interface MapViewProps {
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** Accepted and ignored: there is no map here to point at anything. */
+  ref?: unknown;
 }
 
 export function MapView({ children, style }: MapViewProps) {

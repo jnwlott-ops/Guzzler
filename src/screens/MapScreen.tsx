@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -76,6 +76,12 @@ export function MapScreen() {
   const { vehicle, save: saveVehicle, clear: clearVehicle } = useVehicle();
   const range = useMemo(() => estimateRange(vehicle), [vehicle]);
 
+  // Typed off the native map; the web stand-in ignores refs, so every call
+  // below is guarded and simply does nothing there.
+  const mapRef = useRef<ComponentRef<typeof MapView>>(null);
+  /** Set once the map has been pointed at the driver, or they have moved it. */
+  const centered = useRef(false);
+
   const initialRegion: Region = {
     ...(location ?? FALLBACK_LOCATION),
     latitudeDelta: DEFAULT_DELTA,
@@ -112,6 +118,33 @@ export function MapScreen() {
         : undefined,
     [ranked, vehicle, location],
   );
+
+  /**
+   * Point the map at the driver once their location arrives.
+   *
+   * `initialRegion` is read once at mount and ignored forever after, so
+   * whichever wins the race decides where the app sits — and a permission
+   * prompt means location loses every time on a fresh launch. The result was a
+   * driver in Georgia looking at Austin, with no hint that anything was wrong,
+   * because the fallback region is a perfectly ordinary-looking map.
+   */
+  useEffect(() => {
+    if (!location || centered.current) return;
+    centered.current = true;
+    mapRef.current?.animateToRegion(
+      { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+      600,
+    );
+  }, [location]);
+
+  /** Puts the map back on the driver, from wherever they have panned to. */
+  const recenter = () => {
+    if (!location) return;
+    mapRef.current?.animateToRegion(
+      { ...location, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+      400,
+    );
+  };
 
   const approach = useApproachAlerts(location, favorites);
 
@@ -206,6 +239,12 @@ export function MapScreen() {
         showsUserLocation={status === 'granted'}
         showsMyLocationButton
         onPress={() => setSelectedId(undefined)}
+        // A drag means the driver has chosen where to look, so the one-time
+        // recentre below must not yank the map out from under them.
+        onPanDrag={() => {
+          centered.current = true;
+        }}
+        ref={mapRef}
       >
         {location && range && <RangeRings center={location} range={range} />}
         {trip.route && (
@@ -345,6 +384,19 @@ export function MapScreen() {
         <Text style={styles.attributionText}>Prices: {activeFeed.name} · Ratings by drivers</Text>
       </View>
 
+      {/* showsMyLocationButton is a Google Maps prop, so on iOS — where we run
+          Apple Maps — there is otherwise no way back to yourself once you pan. */}
+      {location && !selected && !trip.route && (
+        <Pressable
+          style={[styles.recenter, { bottom: insets.bottom + spacing.xl }]}
+          onPress={recenter}
+          accessibilityRole="button"
+          accessibilityLabel="Centre the map on your location"
+        >
+          <Text style={styles.recenterIcon}>◎</Text>
+        </Pressable>
+      )}
+
       {/* The trip plan takes the sheet slot; a tapped station supersedes it. */}
       {trip.route && trip.plan && !selected && (
         <View style={styles.sheetWrapper}>
@@ -444,6 +496,28 @@ export function MapScreen() {
 }
 
 const styles = StyleSheet.create({
+  recenter: {
+    position: 'absolute',
+    right: spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  recenterIcon: {
+    fontSize: 20,
+    color: colors.accent,
+    lineHeight: 24,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.surface,
