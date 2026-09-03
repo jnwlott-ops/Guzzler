@@ -11,6 +11,9 @@ import {
   View,
 } from 'react-native';
 
+import { PickerField } from './PickerField';
+import { activeVehicleCatalog } from '../data/vehicleCatalog';
+import { useVehicleCatalog } from '../hooks/useVehicleCatalog';
 import { estimateRange, formatLevel, formatMiles } from '../lib/range';
 import { colors, radius, spacing } from '../theme';
 import { VEHICLE_UNITS, type Vehicle, type VehicleFuelType } from '../types';
@@ -27,13 +30,16 @@ interface VehicleModalProps {
 const LEVELS = [0, 0.25, 0.5, 0.75, 1];
 
 /**
- * Vehicle setup. Deliberately four fields and a level picker rather than a
- * year/make/model lookup: the driver knows their own MPG and tank size, and
- * making them page through three dropdowns before the map is useful would cost
- * more users than the precision is worth.
+ * Vehicle setup, either by looking the car up or by typing the numbers in.
  *
- * A lookup against the free EPA fueleconomy.gov API is the obvious upgrade —
- * see docs/RANGE.md.
+ * Lookup is the default because most drivers know their year/make/model and
+ * far fewer know their MPG. But it is never the only path: the catalog is a
+ * network call, this app is used in cars with one bar of signal, and a form
+ * that cannot be completed offline is a form that loses the user. Manual entry
+ * stays a tap away and every looked-up number lands in an editable field.
+ *
+ * The lookup fills MPG exactly and tank size only approximately — no free
+ * source publishes tank capacity. See src/lib/tankSize.ts.
  */
 export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: VehicleModalProps) {
   const [label, setLabel] = useState('');
@@ -42,6 +48,12 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
   const [efficiency, setEfficiency] = useState('');
   const [level, setLevel] = useState(0.5);
   const [error, setError] = useState<string | undefined>();
+  const [mode, setMode] = useState<'lookup' | 'manual'>('lookup');
+  /** Set when the capacity currently in the box came from the size-class guess
+   *  rather than from the driver, so the UI can admit which it is. */
+  const [capacityEstimated, setCapacityEstimated] = useState(false);
+
+  const catalog = useVehicleCatalog(visible && mode === 'lookup');
 
   // Re-seed the form each time it opens, so cancelling never leaves half-typed
   // values behind for the next open.
@@ -59,7 +71,24 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
     setEfficiency(vehicle ? String(vehicle.efficiency) : '');
     setLevel(vehicle?.level ?? DEFAULT_VEHICLE.level);
     setError(undefined);
+    setCapacityEstimated(false);
+    // Editing an existing car opens on the numbers; a new one opens on lookup.
+    setMode(vehicle ? 'manual' : 'lookup');
   }, [visible, vehicle]);
+
+  // A resolved trim fills the form and hands over to the manual view, so the
+  // driver sees exactly what was filled in and can correct the guessed tank.
+  useEffect(() => {
+    const found = catalog.resolved;
+    if (!found) return;
+    setLabel(found.label);
+    setFuelType(found.fuelType);
+    setEfficiency(String(found.efficiency));
+    setCapacity(String(found.estimatedCapacity));
+    setCapacityEstimated(true);
+    setError(undefined);
+    setMode('manual');
+  }, [catalog.resolved]);
 
   const units = VEHICLE_UNITS[fuelType];
 
@@ -109,6 +138,73 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
               Used to show how far you can get on what's in the tank.
             </Text>
 
+            <View style={styles.modeRow}>
+              {(['lookup', 'manual'] as const).map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setMode(option)}
+                  style={[styles.segment, mode === option && styles.segmentActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mode === option }}
+                >
+                  <Text style={[styles.segmentText, mode === option && styles.segmentTextActive]}>
+                    {option === 'lookup' ? 'Look it up' : 'Enter manually'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {mode === 'lookup' ? (
+              <>
+                <PickerField
+                  label="Year"
+                  placeholder="Choose a year"
+                  value={catalog.selection.year}
+                  options={catalog.years}
+                  loading={catalog.loading === 'year'}
+                  onChange={(option) => catalog.choose('year', option)}
+                />
+                <PickerField
+                  label="Make"
+                  placeholder="Choose a make"
+                  value={catalog.selection.make}
+                  options={catalog.makes}
+                  loading={catalog.loading === 'make'}
+                  disabled={!catalog.selection.year}
+                  onChange={(option) => catalog.choose('make', option)}
+                />
+                <PickerField
+                  label="Model"
+                  placeholder="Choose a model"
+                  value={catalog.selection.model}
+                  options={catalog.models}
+                  loading={catalog.loading === 'model'}
+                  disabled={!catalog.selection.make}
+                  onChange={(option) => catalog.choose('model', option)}
+                />
+                <PickerField
+                  label="Engine"
+                  placeholder="Choose an engine"
+                  value={catalog.selection.trim}
+                  options={catalog.trims}
+                  loading={catalog.loading === 'trim' || catalog.loading === 'details'}
+                  disabled={!catalog.selection.model}
+                  onChange={(option) => catalog.choose('trim', option)}
+                />
+
+                {catalog.error && (
+                  <View style={styles.lookupError}>
+                    <Text style={styles.error}>{catalog.error}</Text>
+                    <Pressable onPress={() => setMode('manual')} accessibilityRole="button">
+                      <Text style={styles.link}>Enter the numbers yourself instead</Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                <Text style={styles.attribution}>{activeVehicleCatalog.attribution}</Text>
+              </>
+            ) : (
+              <>
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Name</Text>
               <TextInput
@@ -157,6 +253,7 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                   selectTextOnFocus
                   onChangeText={(text) => {
                     setCapacity(text);
+                    setCapacityEstimated(false);
                     setError(undefined);
                   }}
                   keyboardType="decimal-pad"
@@ -164,6 +261,11 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                   placeholderTextColor={colors.unknown}
                   maxLength={6}
                 />
+                {capacityEstimated && (
+                  <Text style={styles.estimateNote}>
+                    Estimated from size class — check your manual and correct it.
+                  </Text>
+                )}
               </View>
               <View style={styles.rowField}>
                 <Text style={styles.fieldLabel}>{units.efficiency}</Text>
@@ -207,6 +309,9 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
               </View>
             </View>
 
+              </>
+            )}
+
             {preview && (
               <View style={styles.preview}>
                 <Text style={styles.previewRange}>{formatMiles(preview.comfortableMiles)}</Text>
@@ -246,6 +351,31 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
 }
 
 const styles = StyleSheet.create({
+  modeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  lookupError: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  link: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  attribution: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
+  },
+  estimateNote: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 15,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

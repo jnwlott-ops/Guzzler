@@ -67,22 +67,53 @@ to ignore banners.
 
 ## Getting vehicle specs
 
-Today the driver types MPG and tank size. That's deliberate for a first pass:
-three dropdowns before the map is useful would cost more users than the
-precision is worth.
+The driver picks year → make → model → engine, or types the numbers in.
+Lookup is the default because most people know their model and far fewer know
+their MPG.
 
-The upgrade is [EPA's fueleconomy.gov Web Services](https://www.fueleconomy.gov/feg/ws/)
-— free, no API key, every model year from 1984, and it carries EV range too.
-The flow is year → make → model → options → MPG.
+Specs come from [EPA's fueleconomy.gov Web Services](https://www.fueleconomy.gov/feg/ws/):
+free, no API key, every model year from 1984, EVs included. It is also the
+authoritative source rather than merely a convenient one — the EPA rating is
+the number the window sticker shows and the number every buyer's guide quotes.
 
-One gap: **EPA data doesn't include tank capacity.** That still needs manual
-entry or a separate dataset, so a lookup would prefill efficiency but not
-capacity.
+### Why not Consumer Reports
+
+CR has no public API. Its vehicle data is subscription content licensed
+business-to-business, so using it means a negotiated contract, not a signup —
+and scraping it is a licensing problem, not a technical one. It is also not
+the right source for this screen: CR's value is reliability and road-test
+opinion, and what the range math needs is the EPA rating CR itself cites.
+
+Paid catalogs (DataOne, Chrome Data) do carry real tank capacity, which is the
+one thing missing below. Worth revisiting if capacity accuracy starts costing
+users; `VehicleCatalog` exists so that swap is one file.
+
+### The tank capacity gap
+
+**No free source publishes tank capacity.** The EPA does not carry it, and
+NHTSA's vPIC has the field but leaves it empty far more often than not.
+
+So `src/lib/tankSize.ts` estimates gallons from the EPA size class. Range is
+computed straight off that number, which makes a silent wrong guess into a
+driver stranded further from a station than they planned for. Three rules hold
+wherever the estimate is used, and should keep holding:
+
+1. It is shown as a guess, with the class it came from.
+2. The field stays editable.
+3. Typing over it clears the "estimated" flag — it is the driver's number now.
+
+### Offline
+
+The catalog is a network call and this app is used in cars with one bar. Manual
+entry is always one tap away, a failed lookup says so explicitly, and every
+looked-up value lands in an ordinary editable field rather than a locked one.
 
 ## Open work
 
 - Real isochrones instead of circles (above).
-- Prefill efficiency from the EPA API.
+- Real tank capacity, which needs a paid catalog (above).
+- Cache the year/make/model lists on device so the lookup survives a dead
+  signal instead of falling back to manual entry.
 - Range is a lie in other ways too: cold weather, elevation, speed, load, and
   battery degradation all move it, and EVs far more than gas. Worth surfacing a
   confidence band rather than a single number.
