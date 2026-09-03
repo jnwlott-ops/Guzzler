@@ -324,11 +324,19 @@ export function planTrip({
     const c = candidates[index];
     const price = priceFor(c.station, grade)!;
     const miles = legMiles[index];
-    const units = miles / vehicle.efficiency;
 
     // Range available for this leg: the full tank, except the first leg which
     // runs on whatever was already aboard.
     const available = index === order[0] && previous[index] === -1 ? startRange : fullRange;
+
+    // Bought here = what it takes to fill from whatever is left on arrival.
+    //
+    // Charging only for the leg just driven is right for every stop after the
+    // first, because you leave each one full. It is badly wrong for the first:
+    // a driver who sets off on a quarter tank and stops two miles later buys a
+    // whole tank, not two miles' worth. That mistake priced a 176-mile trip at
+    // four cents.
+    const units = (fullRange - (available - miles)) / vehicle.efficiency;
 
     return {
       station: c.station,

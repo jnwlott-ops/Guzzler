@@ -239,7 +239,8 @@ export interface RangeDeal {
  */
 export function findRangeDeal(
   ranked: RankedStation[],
-  tankGallons: number,
+  /** Units the driver can actually buy: capacity minus what is already aboard. */
+  gallonsToFill: number,
 ): RangeDeal | undefined {
   const usable = ranked.filter(
     (r) => r.price !== undefined && r.distance !== undefined && r.reachability === 'comfortable',
@@ -251,7 +252,7 @@ export function findRangeDeal(
 
   if (cheapest.station.id === nearest.station.id) return undefined;
 
-  const savings = (nearest.price! - cheapest.price!) * tankGallons;
+  const savings = (nearest.price! - cheapest.price!) * gallonsToFill;
   const extraMiles = cheapest.distance! - nearest.distance!;
 
   // Not worth surfacing for pocket change, and never worth surfacing when the

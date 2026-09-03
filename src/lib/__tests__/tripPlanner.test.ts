@@ -351,3 +351,66 @@ describe('EV trips', () => {
     }
   });
 });
+
+describe('what the trip actually costs at the pump', () => {
+  // 14 gal, 30 MPG: 420 miles of fuel, of which the top 367.5 is usable above
+  // the eighth-tank reserve. A quarter tank is 105 miles of fuel, so only
+  // 52.5 of it is usable — which is why the app shows "66 mi range" for a
+  // quarter tank in a 29-gallon truck rather than a quarter of its full range.
+  const quarterTank = car({ level: 0.25 });
+
+  it('charges for filling the tank at the first stop, not for the miles to reach it', () => {
+    // Two miles into a 300-mile trip on a quarter tank. The driver buys a
+    // tank of fuel here; billing them for two miles of it priced a real
+    // 176-mile trip at four cents.
+    const route = northRoute(300 / MPD);
+    const result = plan([stationAt('early', 2, 0, 3.0)], route, quarterTank) as FeasibleTripPlan;
+
+    expect(result.feasible).toBe(true);
+    expect(result.stops).toHaveLength(1);
+
+    // Arrives with 50.5 of its 52.5 usable miles left and fills to 367.5:
+    // 317 miles of fuel at 30 MPG is 10.57 gal, about $31.70. Billing the two
+    // miles driven would have made it 20 cents.
+    expect(result.stops[0].units).toBeCloseTo(10.567, 2);
+    expect(result.fuelCost).toBeCloseTo(31.7, 1);
+    expect(result.fuelCost).toBeGreaterThan(20);
+  });
+
+  it('still bills a later stop for only the leg it just drove', () => {
+    // Leaving a stop full means the next fill replaces exactly that leg — the
+    // behaviour the first-stop fix must not disturb. 900 miles on a 367.5-mile
+    // usable range forces both stops.
+    const route = northRoute(900 / MPD);
+    const result = plan(
+      [stationAt('first', 300, 0, 3.0), stationAt('second', 650, 0, 3.0)],
+      route,
+      car(),
+    ) as FeasibleTripPlan;
+
+    expect(result.stops).toHaveLength(2);
+    // Started full, so the first stop replaces just the 300 miles driven.
+    expect(result.stops[0].units).toBeCloseTo(300 / 30, 1);
+    // Second stop replaces the 350-mile leg between them.
+    expect(result.stops[1].units).toBeCloseTo(350 / 30, 1);
+  });
+
+  it('never quotes a fill smaller than the fuel the leg burned', () => {
+    const route = northRoute(500 / MPD);
+    const result = plan(
+      [stationAt('a', 10, 0, 3.0), stationAt('b', 200, 0, 2.9), stationAt('c', 380, 0, 3.1)],
+      route,
+      quarterTank,
+    ) as FeasibleTripPlan;
+
+    expect(result.feasible).toBe(true);
+    for (const stop of result.stops) {
+      expect(stop.units).toBeGreaterThan(0);
+      expect(stop.fuelCost).toBeCloseTo(stop.units * stop.pricePerGallon, 6);
+    }
+    expect(result.fuelCost).toBeCloseTo(
+      result.stops.reduce((sum, stop) => sum + stop.fuelCost, 0),
+      6,
+    );
+  });
+});

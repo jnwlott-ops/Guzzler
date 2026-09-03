@@ -100,7 +100,14 @@ export function MapScreen() {
 
   // Only meaningful once we know both where the driver is and what they drive.
   const deal = useMemo(
-    () => (vehicle && location ? findRangeDeal(ranked, vehicle.capacity) : undefined),
+    () =>
+      vehicle && location
+        ? // Savings ride on what will actually go in the tank, not on tank
+          // size — a driver at three-quarters full can only buy a quarter tank
+          // of the cheaper gas, and quoting them a full tank's saving is a
+          // number they will never see at the pump.
+          findRangeDeal(ranked, vehicle.capacity * (1 - vehicle.level))
+        : undefined,
     [ranked, vehicle, location],
   );
 
@@ -148,12 +155,18 @@ export function MapScreen() {
     <View style={styles.container}>
       <MapView
         style={StyleSheet.absoluteFill}
-        // Google Maps on both platforms so the pins and basemap match what
-        // travelers already recognize from navigation.
-        provider={PROVIDER_GOOGLE}
+        // Google on Android, Apple on iOS — not a preference, a constraint.
+        // Expo Go's iOS client does not bundle the Google Maps SDK, so asking
+        // for PROVIDER_GOOGLE there yields a view that renders nothing at all:
+        // no tiles, no pins, just the container's background. A real build
+        // would need a Google Maps iOS key on top of that, where Apple Maps
+        // needs none and is what iPhone drivers already read.
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         // Dark basemap with Google's POIs suppressed, so the only markers on
-        // the map are the stations we priced. See src/mapStyle.ts.
-        customMapStyle={darkMapStyle}
+        // the map are the stations we priced. See src/mapStyle.ts. Apple Maps
+        // ignores customMapStyle entirely and takes userInterfaceStyle below.
+        customMapStyle={Platform.OS === 'android' ? darkMapStyle : undefined}
+        userInterfaceStyle="dark"
         initialRegion={initialRegion}
         onRegionChangeComplete={setRegion}
         showsUserLocation={status === 'granted'}
@@ -442,20 +455,29 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: colors.deal,
+    // A card on the panel with a green edge, not a green slab. Filling the
+    // whole banner made it the loudest thing on a dark screen — louder than
+    // the flame, which is supposed to be the loudest thing — and it read as an
+    // alert rather than an offer the driver is free to wave off.
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.deal,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
   dealTitle: {
-    color: '#FFFFFF',
+    // Green carries the meaning here, the same green the cheap pins wear.
+    color: colors.deal,
     fontSize: 14,
     fontWeight: '800',
   },
   dealBody: {
-    color: 'rgba(255,255,255,0.92)',
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
     lineHeight: 17,
@@ -472,18 +494,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dealDismiss: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   dealDismissText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '600',
   },
   dealAccept: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.deal,
   },
   dealAcceptText: {
-    color: colors.deal,
+    color: colors.onStrong,
     fontSize: 13,
     fontWeight: '700',
   },

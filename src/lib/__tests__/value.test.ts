@@ -188,6 +188,25 @@ describe('findRangeDeal', () => {
   const near = station('near', 3.8, { northDegrees: 0.145 });
   const farCheap = station('far-cheap', 2.9, { northDegrees: 2.9 });
 
+  it('scales savings by what will fit in the tank, not by tank size', () => {
+    // The banner promised $13.92 on a 29-gallon tank that was already a
+    // quarter full — a full tank's worth of saving on a three-quarter fill.
+    // Savings have to track the gallons actually bought.
+    const ranked = rankStations([near, farCheap], 'regular', 'price', { origin, range: big }).ranked;
+
+    const fullTank = findRangeDeal(ranked, 29)!;
+    const threeQuarters = findRangeDeal(ranked, 29 * 0.75)!;
+
+    expect(threeQuarters.savings).toBeCloseTo(fullTank.savings * 0.75, 6);
+    expect(threeQuarters.savings).toBeLessThan(fullTank.savings);
+  });
+
+  it('stays quiet when the tank is nearly full and there is nothing to buy', () => {
+    // A detour to save pennies on the two gallons that will fit is not a deal.
+    const ranked = rankStations([near, farCheap], 'regular', 'price', { origin, range: big }).ranked;
+    expect(findRangeDeal(ranked, 0.5)).toBeUndefined();
+  });
+
   it('reports the savings from driving on', () => {
     const ranked = rankStations([near, farCheap], 'regular', 'price', { origin, range: big }).ranked;
     const deal = findRangeDeal(ranked, 14)!;
