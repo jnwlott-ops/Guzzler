@@ -45,14 +45,19 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
 
   // Re-seed the form each time it opens, so cancelling never leaves half-typed
   // values behind for the next open.
+  //
+  // Only ever prefilled from a vehicle the driver actually saved. Seeding a
+  // new form from DEFAULT_VEHICLE meant every field arrived pre-typed, so
+  // naming your own car started with deleting the words "My car" — a default
+  // that has to be erased is worse than no default at all. Empty fields let
+  // the placeholders show what to write instead.
   useEffect(() => {
     if (!visible) return;
-    const source = vehicle ?? DEFAULT_VEHICLE;
-    setLabel(source.label);
-    setFuelType(source.fuelType);
-    setCapacity(String(source.capacity));
-    setEfficiency(String(source.efficiency));
-    setLevel(source.level);
+    setLabel(vehicle?.label ?? '');
+    setFuelType(vehicle?.fuelType ?? DEFAULT_VEHICLE.fuelType);
+    setCapacity(vehicle ? String(vehicle.capacity) : '');
+    setEfficiency(vehicle ? String(vehicle.efficiency) : '');
+    setLevel(vehicle?.level ?? DEFAULT_VEHICLE.level);
     setError(undefined);
   }, [visible, vehicle]);
 
@@ -110,6 +115,7 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                 style={styles.input}
                 value={label}
                 onChangeText={setLabel}
+                selectTextOnFocus
                 placeholder="2019 Camry"
                 placeholderTextColor={colors.unknown}
                 maxLength={40}
@@ -148,6 +154,7 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                 <TextInput
                   style={styles.input}
                   value={capacity}
+                  selectTextOnFocus
                   onChangeText={(text) => {
                     setCapacity(text);
                     setError(undefined);
@@ -163,6 +170,7 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                 <TextInput
                   style={styles.input}
                   value={efficiency}
+                  selectTextOnFocus
                   onChangeText={(text) => {
                     setEfficiency(text);
                     setError(undefined);
