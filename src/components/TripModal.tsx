@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -55,6 +56,33 @@ export function TripModal({ visible, loading, error, onPlan, onClose }: TripModa
             maxLength={80}
             accessibilityLabel="Destination"
           />
+
+          {/* When the provider can only resolve a fixed set, offer it rather
+              than letting someone type a place it will fail on. A real
+              geocoder leaves knownDestinations undefined and this disappears. */}
+          {activeRouteProvider.knownDestinations && (
+            <View style={styles.suggestions}>
+              <Text style={styles.suggestionsLabel}>Demo routing knows</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.chips}>
+                  {activeRouteProvider.knownDestinations.map((place) => (
+                    <Pressable
+                      key={place}
+                      style={styles.chip}
+                      onPress={() => {
+                        setDestination(place);
+                        onPlan(place);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Plan a trip to ${place}`}
+                    >
+                      <Text style={styles.chipText}>{place}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -111,6 +139,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     marginTop: spacing.lg,
+  },
+  suggestions: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  suggestionsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  chips: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
   },
   error: {
     color: colors.gouge,

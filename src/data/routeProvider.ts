@@ -18,10 +18,29 @@ export interface RouteProvider {
    * trips where providers offer one.
    */
   getRoute(origin: LatLng, destination: string, signal?: AbortSignal): Promise<Route>;
+
+  /**
+   * Destinations this provider can actually resolve, when that set is finite.
+   *
+   * A real geocoder resolves anything and leaves this undefined. The mock knows
+   * a fixed list, and the UI offers them rather than letting someone type a
+   * place it will silently invent a route to.
+   */
+  readonly knownDestinations?: readonly string[];
 }
 
 /** Rough centers for the cities the mock knows by name. */
 const KNOWN_PLACES: Record<string, LatLng> = {
+  atlanta: { latitude: 33.749, longitude: -84.388 },
+  savannah: { latitude: 32.0809, longitude: -81.0912 },
+  chattanooga: { latitude: 35.0456, longitude: -85.3097 },
+  birmingham: { latitude: 33.5186, longitude: -86.8104 },
+  charlotte: { latitude: 35.2271, longitude: -80.8431 },
+  nashville: { latitude: 36.1627, longitude: -86.7816 },
+  jacksonville: { latitude: 30.3322, longitude: -81.6557 },
+  orlando: { latitude: 28.5383, longitude: -81.3792 },
+  memphis: { latitude: 35.1495, longitude: -90.049 },
+  'new orleans': { latitude: 29.9511, longitude: -90.0715 },
   austin: { latitude: 30.2672, longitude: -97.7431 },
   dallas: { latitude: 32.7767, longitude: -96.797 },
   houston: { latitude: 29.7604, longitude: -95.3698 },
@@ -30,8 +49,6 @@ const KNOWN_PLACES: Record<string, LatLng> = {
   denver: { latitude: 39.7392, longitude: -104.9903 },
   phoenix: { latitude: 33.4484, longitude: -112.074 },
   albuquerque: { latitude: 35.0844, longitude: -106.6504 },
-  memphis: { latitude: 35.1495, longitude: -90.049 },
-  'new orleans': { latitude: 29.9511, longitude: -90.0715 },
 };
 
 const MILES_PER_DEG_LAT = 69.047;
@@ -50,21 +67,28 @@ const CIRCUITY = 1.25;
 export class MockRouteProvider implements RouteProvider {
   readonly name = 'Demo route';
 
+  /** Title-cased for display; matching is case-insensitive and substring-based. */
+  readonly knownDestinations = Object.keys(KNOWN_PLACES)
+    .map((name) => name.replace(/\b\w/g, (c) => c.toUpperCase()))
+    .sort();
+
   async getRoute(origin: LatLng, destination: string): Promise<Route> {
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     const query = destination.trim().toLowerCase();
     const match = Object.entries(KNOWN_PLACES).find(([name]) => query.includes(name));
 
-    // Unknown destinations get a point roughly 180 miles northeast, so the
-    // feature is demoable without memorizing the list above.
-    const target: LatLng = match
-      ? match[1]
-      : {
-          latitude: origin.latitude + 1.8,
-          longitude: origin.longitude + 1.8,
-        };
+    // Fail loudly on anything this mock can't resolve. It used to invent a
+    // point 180 miles northeast, which meant typing a real local destination
+    // silently produced a route to an empty field — indistinguishable from the
+    // feature being broken.
+    if (!match) {
+      throw new Error(
+        `Demo routing doesn't know "${destination.trim()}". Pick one of the suggested cities.`,
+      );
+    }
 
+    const target: LatLng = match[1];
     const points = interpolate(origin, target);
 
     let straightLine = 0;
@@ -79,9 +103,7 @@ export class MockRouteProvider implements RouteProvider {
       points,
       distanceMiles: distance,
       durationMinutes: (distance / 62) * 60,
-      destinationName: match
-        ? match[0].replace(/\b\w/g, (c) => c.toUpperCase())
-        : destination.trim() || 'Destination',
+      destinationName: match[0].replace(/\b\w/g, (c) => c.toUpperCase()),
       destination: target,
     };
   }

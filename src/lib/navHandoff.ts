@@ -39,7 +39,14 @@ export const UNIVERSAL_MAX_WAYPOINTS = 0;
 export interface HandoffRequest {
   /** Where the driver is going on this leg. */
   destination: LatLng;
-  /** Human-readable destination, used where the app supports a label. */
+  /**
+   * Human-readable destination, for apps that support a true label.
+   *
+   * Deliberately unused by every current target: Apple treats it as a search
+   * query that overrides the coordinates, and Google's directions URL has no
+   * label field. Kept because a nav app that does support one shouldn't
+   * require reshaping this interface.
+   */
   label?: string;
   /**
    * Stops to pass through on the way. Silently truncated to what the target
@@ -98,8 +105,12 @@ export function buildDirectionsUrl(app: NavApp, request: HandoffRequest): Handof
     }
 
     case 'apple': {
+      // Coordinates only, deliberately. Apple Maps treats `q` as a *search
+      // query*, not a label — sending it alongside `daddr` makes Maps search
+      // for the text and ignore the coordinates entirely. With generated
+      // addresses that meant every station routed to whatever real gas station
+      // Apple found nearby, which is exactly what it did on a device.
       const params = new URLSearchParams({ daddr: destination, dirflg: 'd' });
-      if (request.label) params.set('q', request.label);
       return { url: `https://maps.apple.com/?${params.toString()}`, dropped: requested };
     }
   }

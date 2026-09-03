@@ -80,13 +80,33 @@ describe('buildDirectionsUrl', () => {
 
   describe('Apple Maps', () => {
     it('sets a driving destination', () => {
-      const params = new URL(
-        buildDirectionsUrl('apple', { destination: dallas, label: 'Shell' }).url,
-      ).searchParams;
+      const params = new URL(buildDirectionsUrl('apple', { destination: dallas }).url).searchParams;
 
       expect(params.get('daddr')).toBe('32.776700,-96.797000');
       expect(params.get('dirflg')).toBe('d');
-      expect(params.get('q')).toBe('Shell');
+    });
+
+    it('never sends a label as a search query', () => {
+      // Regression, found on a device: Apple Maps treats `q` as a *search*,
+      // not a label. Sent alongside daddr it ignored our coordinates entirely
+      // and routed to whatever real gas station it found near the user — so
+      // every station in the app navigated to the same Chevron.
+      const params = new URL(
+        buildDirectionsUrl('apple', {
+          destination: dallas,
+          label: "Buc-ee's, 5475 Market St",
+        }).url,
+      ).searchParams;
+
+      expect(params.has('q')).toBe(false);
+      expect(params.get('daddr')).toBe('32.776700,-96.797000');
+    });
+
+    it('routes distinct stations to distinct destinations', () => {
+      const urls = [dallas, waco, okc].map(
+        (c) => buildDirectionsUrl('apple', { destination: c, label: 'Chevron' }).url,
+      );
+      expect(new Set(urls).size).toBe(3);
     });
 
     it('relays every intermediate stop, since it supports no waypoints', () => {
