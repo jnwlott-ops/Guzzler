@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { PickerField } from './PickerField';
+import { FUEL_TYPE_ICONS } from './icons/amenityIcons';
 import { activeVehicleCatalog } from '../data/vehicleCatalog';
 import { useVehicleCatalog } from '../hooks/useVehicleCatalog';
 import { estimateRange, formatLevel, formatMiles } from '../lib/range';
@@ -229,14 +230,25 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
                     accessibilityRole="button"
                     accessibilityState={{ selected: fuelType === type }}
                   >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        fuelType === type && styles.segmentTextActive,
-                      ]}
-                    >
-                      {type === 'gas' ? '⛽ Gas' : '⚡ Electric'}
-                    </Text>
+                    <View style={styles.segmentInner}>
+                      {(() => {
+                        const Icon = FUEL_TYPE_ICONS[type];
+                        return (
+                          <Icon
+                            size={14}
+                            color={fuelType === type ? colors.onAccent : colors.textMuted}
+                          />
+                        );
+                      })()}
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          fuelType === type && styles.segmentTextActive,
+                        ]}
+                      >
+                        {type === 'gas' ? 'Gas' : 'Electric'}
+                      </Text>
+                    </View>
                   </Pressable>
                 ))}
               </View>
@@ -351,6 +363,11 @@ export function VehicleModal({ visible, vehicle, onSave, onClear, onClose }: Veh
 }
 
 const styles = StyleSheet.create({
+  segmentInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
   modeRow: {
     flexDirection: 'row',
     gap: spacing.sm,

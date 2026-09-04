@@ -5,13 +5,14 @@ import { formatMiles } from '../lib/range';
 import { formatRating, type RankedStation, type RankMode } from '../lib/value';
 import { colors, radius, spacing, verdictColor, verdictLabel } from '../theme';
 import {
-  AMENITY_ICONS,
   AMENITY_LABELS,
   FUEL_GRADE_LABELS,
   type FuelGrade,
   type Station,
 } from '../types';
 import { RatingScale } from './RatingScale';
+import { AMENITY_ICONS } from './icons/amenityIcons';
+import { CloseIcon, FoodIcon, RestroomIcon, StarIcon } from './icons';
 
 interface StationSheetProps {
   ranked: RankedStation;
@@ -70,9 +71,9 @@ export function StationSheet({
             isFavorite ? `Remove ${station.name} from favorites` : `Save ${station.name}`
           }
         >
-          <Text style={[styles.favorite, isFavorite && styles.favoriteOn]}>
-            {isFavorite ? '★' : '☆'}
-          </Text>
+          {/* Filled vs outline is the usual favourite affordance; with a
+              single drawn star, colour carries it instead. */}
+          <StarIcon size={20} color={isFavorite ? colors.accent : colors.textMuted} />
         </Pressable>
         <Pressable
           onPress={onClose}
@@ -80,7 +81,7 @@ export function StationSheet({
           accessibilityRole="button"
           accessibilityLabel="Close station details"
         >
-          <Text style={styles.close}>✕</Text>
+          <CloseIcon size={16} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -134,21 +135,29 @@ export function StationSheet({
       {/* Driver ratings. Separate from anything an advertiser can buy. */}
       <View style={styles.ratings}>
         <View style={styles.ratingRow}>
-          <Text style={styles.ratingLabel}>🚻 Restroom</Text>
+          <View style={styles.ratingLabelRow}>
+            <RestroomIcon size={14} color={colors.textMuted} />
+            <Text style={styles.ratingLabel}>Restroom</Text>
+          </View>
           <View style={styles.ratingValue}>
             <RatingScale value={restroom} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(restroom)}</Text>
           </View>
         </View>
         <View style={styles.ratingRow}>
-          <Text style={styles.ratingLabel}>🍔 Food</Text>
+          <View style={styles.ratingLabelRow}>
+            <FoodIcon size={14} color={colors.textMuted} />
+            <Text style={styles.ratingLabel}>Food</Text>
+          </View>
           <View style={styles.ratingValue}>
             <RatingScale value={food} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(food)}</Text>
           </View>
         </View>
         <View style={styles.ratingRow}>
-          <Text style={styles.ratingLabel}>Overall stop</Text>
+          <View style={styles.ratingLabelRow}>
+            <Text style={styles.ratingLabel}>Overall stop</Text>
+          </View>
           <View style={styles.ratingValue}>
             <RatingScale value={overall} size={14} />
             <Text style={styles.ratingNumber}>{formatRating(overall)}</Text>
@@ -169,7 +178,10 @@ export function StationSheet({
         >
           {station.amenities.map((amenity) => (
             <View key={amenity} style={styles.amenityChip}>
-              <Text style={styles.amenityIcon}>{AMENITY_ICONS[amenity]}</Text>
+              {(() => {
+                const Icon = AMENITY_ICONS[amenity];
+                return <Icon size={13} color={colors.textMuted} />;
+              })()}
               <Text style={styles.amenityLabel}>{AMENITY_LABELS[amenity]}</Text>
             </View>
           ))}
@@ -219,6 +231,11 @@ export function StationSheet({
 }
 
 const styles = StyleSheet.create({
+  ratingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
   sheet: {
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.lg,
@@ -249,19 +266,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  favorite: {
-    fontSize: 22,
-    color: colors.unknown,
-    paddingHorizontal: spacing.sm,
-  },
-  favoriteOn: {
-    color: '#E8A317',
-  },
-  close: {
-    fontSize: 16,
-    color: colors.textMuted,
-    paddingLeft: spacing.sm,
   },
   priceRow: {
     flexDirection: 'row',
@@ -374,16 +378,13 @@ const styles = StyleSheet.create({
   amenityChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs + 1,
     backgroundColor: colors.surface,
     borderRadius: 999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 1,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  amenityIcon: {
-    fontSize: 12,
-    marginRight: spacing.xs,
   },
   amenityLabel: {
     fontSize: 12,

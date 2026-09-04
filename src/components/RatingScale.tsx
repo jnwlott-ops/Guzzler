@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ComponentType } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { PumpIcon, type IconProps } from './icons';
 import { colors, spacing } from '../theme';
 
 interface RatingScaleProps {
@@ -9,11 +11,11 @@ interface RatingScaleProps {
   size?: number;
   label?: string;
   /**
-   * The glyph the scale is measured in. Gas stops are rated in pumps; charging
+   * The mark the scale is measured in. Gas stops are rated in pumps; charging
    * stops are rated in bolts, since "four out of five pumps" is nonsense at a
    * charger.
    */
-  icon?: string;
+  icon?: ComponentType<IconProps>;
 }
 
 const POINTS = [1, 2, 3, 4, 5];
@@ -21,16 +23,17 @@ const POINTS = [1, 2, 3, 4, 5];
 /**
  * Guzzler's 1-5 rating control, in pumps rather than stars.
  *
- * Emoji have no hollow variant the way ★/☆ do, so unfilled points are the same
- * glyph dimmed. That keeps the scale readable without shipping an icon font,
- * and the accessibility label carries the real value either way.
+ * Unfilled points are the same mark in the muted colour rather than a hollow
+ * outline: these run at 14px inside the station sheet, where an outline pump
+ * turns to mush. Colour survives that size; line weight does not. The
+ * accessibility label carries the real value either way.
  */
 export function RatingScale({
   value,
   onChange,
   size = 20,
   label,
-  icon = '⛽',
+  icon: Icon = PumpIcon,
 }: RatingScaleProps) {
   return (
     <View
@@ -43,9 +46,9 @@ export function RatingScale({
         // Round-half-up so a 4.5 average shows five marks rather than four.
         const filled = value !== undefined && value >= point - 0.5;
         const glyph = (
-          <Text style={[styles.icon, { fontSize: size }, !filled && styles.iconEmpty]}>
-            {icon}
-          </Text>
+          <View style={styles.icon}>
+            <Icon size={size} color={filled ? colors.accent : colors.unknown} />
+          </View>
         );
 
         return onChange ? (
@@ -72,10 +75,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs / 2,
   },
   icon: {
-    color: colors.text,
-  },
-  iconEmpty: {
-    // Dimmed rather than hollow — emoji have no outline variant.
-    opacity: 0.22,
+    paddingHorizontal: 1,
   },
 });

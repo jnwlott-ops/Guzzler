@@ -78,18 +78,6 @@ export const AMENITY_LABELS: Record<Amenity, string> = {
   open24h: 'Open 24h',
 };
 
-/** Emoji stand-ins so the scaffold reads without an icon-font dependency. */
-export const AMENITY_ICONS: Record<Amenity, string> = {
-  restroom: '🚻',
-  food: '🍔',
-  coffee: '☕',
-  airPump: '💨',
-  evCharging: '🔌',
-  carWash: '🚿',
-  truckAccessible: '🚚',
-  open24h: '🕐',
-};
-
 /**
  * Community ratings, on a 1-5 scale.
  *

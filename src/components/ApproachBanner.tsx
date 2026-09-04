@@ -24,7 +24,7 @@ export function ApproachBanner({ alert, onNavigate, onDismiss }: ApproachBannerP
     <View style={styles.banner}>
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>
-          ★ {alert.place.name} in {formatMiles(alert.distance)}
+          {alert.place.name} in {formatMiles(alert.distance)}
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           {alert.place.address || 'Saved place'}

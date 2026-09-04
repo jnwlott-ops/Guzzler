@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatPrice } from '../lib/pricing';
 import { formatMiles } from '../lib/range';
 import type { PlannedStop, TripPlan } from '../lib/tripPlanner';
+import { CloseIcon } from './icons';
 import { colors, radius, spacing } from '../theme';
 import type { Route, Station } from '../types';
 
@@ -66,7 +67,7 @@ export function TripPlanSheet({
           accessibilityRole="button"
           accessibilityLabel="Close trip plan"
         >
-          <Text style={styles.close}>✕</Text>
+          <CloseIcon size={16} color={colors.textMuted} />
         </Pressable>
       </View>
 

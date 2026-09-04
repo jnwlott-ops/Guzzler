@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { ChevronDownIcon } from './icons';
 import { colors, radius, spacing } from '../theme';
 import type { CatalogOption } from '../data/vehicleCatalog';
 
@@ -77,7 +78,7 @@ export function PickerField({
         {loading ? (
           <ActivityIndicator size="small" color={colors.textMuted} />
         ) : (
-          <Text style={styles.chevron}>▾</Text>
+          <ChevronDownIcon size={12} color={colors.textMuted} />
         )}
       </Pressable>
 
@@ -159,11 +160,6 @@ const styles = StyleSheet.create({
   },
   controlPlaceholder: {
     color: colors.unknown,
-  },
-  chevron: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
   },
   backdrop: {
     flex: 1,

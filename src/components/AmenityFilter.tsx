@@ -1,7 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '../theme';
-import { AMENITIES, AMENITY_ICONS, AMENITY_LABELS, type Amenity } from '../types';
+import { AMENITY_ICONS } from './icons/amenityIcons';
+import { AMENITIES, AMENITY_LABELS, type Amenity } from '../types';
 
 interface AmenityFilterProps {
   selected: Amenity[];
@@ -24,6 +25,7 @@ export function AmenityFilter({ selected, onToggle }: AmenityFilterProps) {
     >
       {AMENITIES.map((amenity) => {
         const active = selected.includes(amenity);
+        const Icon = AMENITY_ICONS[amenity];
         return (
           <Pressable
             key={amenity}
@@ -33,7 +35,9 @@ export function AmenityFilter({ selected, onToggle }: AmenityFilterProps) {
             accessibilityState={{ selected: active }}
             accessibilityLabel={`Filter by ${AMENITY_LABELS[amenity]}`}
           >
-            <Text style={styles.icon}>{AMENITY_ICONS[amenity]}</Text>
+            <View style={styles.icon}>
+              <Icon size={14} color={active ? colors.onAccent : colors.textMuted} />
+            </View>
             <Text style={[styles.label, active && styles.labelActive]}>
               {AMENITY_LABELS[amenity]}
             </Text>
@@ -64,7 +68,6 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   icon: {
-    fontSize: 12,
     marginRight: spacing.xs + 1,
   },
   label: {

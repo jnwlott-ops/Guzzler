@@ -23,6 +23,7 @@ import { ReportPriceModal } from '../components/ReportPriceModal';
 import { StationMarker } from '../components/StationMarker';
 import { StationSheet } from '../components/StationSheet';
 import { StopSwapSheet } from '../components/StopSwapSheet';
+import { LocateIcon } from '../components/icons';
 import { TripModal } from '../components/TripModal';
 import { TripPlanSheet } from '../components/TripPlanSheet';
 import { VehicleModal } from '../components/VehicleModal';
@@ -429,7 +430,7 @@ export function MapScreen() {
           accessibilityRole="button"
           accessibilityLabel="Centre the map on your location"
         >
-          <Text style={styles.recenterIcon}>◎</Text>
+          <LocateIcon size={20} color={colors.accent} />
         </Pressable>
       )}
 
@@ -548,11 +549,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
-  },
-  recenterIcon: {
-    fontSize: 20,
-    color: colors.accent,
-    lineHeight: 24,
   },
   container: {
     flex: 1,

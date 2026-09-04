@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Marker } from './PlatformMap';
 
 import { formatPinPrice, type PriceVerdict } from '../lib/pricing';
+import { StarIcon } from './icons';
 import { flame, radius, verdictColor } from '../theme';
 import type { Station } from '../types';
 
@@ -46,7 +47,11 @@ function StationMarkerComponent({
             isBest && styles.bubbleBest,
           ]}
         >
-          {isBest && <Text style={styles.star}>★</Text>}
+          {isBest && (
+            <View style={styles.star}>
+              <StarIcon size={9} color={flame.gold} />
+            </View>
+          )}
           <Text style={styles.price}>{formatPinPrice(price)}</Text>
           {/* A quiet marker that an offer is attached — deliberately not a
               visual promotion, since position and prominence aren't for sale. */}
@@ -79,8 +84,6 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
   },
   star: {
-    color: flame.gold,
-    fontSize: 10,
     marginRight: 3,
   },
   price: {

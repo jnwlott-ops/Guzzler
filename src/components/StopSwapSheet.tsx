@@ -4,6 +4,7 @@ import { formatMiles } from '../lib/range';
 import { formatPrice } from '../lib/pricing';
 import type { StopAlternative } from '../lib/tripPlanner';
 import { formatRating } from '../lib/value';
+import { CloseIcon, UndoIcon } from './icons';
 import { colors, radius, spacing } from '../theme';
 
 interface StopSwapSheetProps {
@@ -51,7 +52,7 @@ export function StopSwapSheet({
               </Text>
             </View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close">
-              <Text style={styles.close}>✕</Text>
+              <CloseIcon size={16} color={colors.textMuted} />
             </Pressable>
           </View>
 
@@ -61,7 +62,8 @@ export function StopSwapSheet({
               onPress={onLetGuzzlerPick}
               accessibilityRole="button"
             >
-              <Text style={styles.revertText}>↩ Let Guzzler pick this one</Text>
+              <UndoIcon size={14} color={colors.accent} />
+              <Text style={styles.revertText}>Let Guzzler pick this one</Text>
             </Pressable>
           )}
 
@@ -147,12 +149,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-  close: {
-    fontSize: 18,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.sm,
-  },
   revert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
     marginTop: spacing.md,
     paddingVertical: spacing.sm,
   },
